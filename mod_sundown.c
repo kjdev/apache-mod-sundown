@@ -268,6 +268,7 @@ static int sundown_handler(request_rec *r)
     if (r->args) {
         apr_hash_t *params = parse_param_from_args(r, r->args);
 #ifdef SUNDOWN_RAW_SUPPORT
+        char buf[HUGE_STRING_LEN];
         if (get_param(params, "raw", 0) != NULL) {
             while (apr_file_gets(buf, HUGE_STRING_LEN, fp) == APR_SUCCESS) {
                 ap_rputs(buf, r);
