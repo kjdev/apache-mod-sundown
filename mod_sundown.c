@@ -1,26 +1,19 @@
 /*
 **  mod_sundown.c -- Apache sundown module
 **
-**  To play with this sample module first compile it into a
-**  DSO file and install it into Apache's modules directory
-**  by running:
-**
-**    $ apxs -c -i mod_sundown.c
-**
-**  Then activate it in Apache's httpd.conf file for instance
-**  for the URL /sundown in as follows:
+**  Then activate it in Apache's httpd.conf file:
 **
 **    # httpd.conf
 **    LoadModule sundown_module modules/mod_sundown.so
 **    AddHandler sundown .md
-**    SundownLayoutPath      [path]
+**    SundownLayoutPath      /var/www/html
 **    SundownLayoutDefault   layout
 **    SundownLayoutExtension .html
-**
-**  Then after restarting Apache via
-**
-**    $ apachectl restart
 */
+
+#ifdef HAVE_CONFIG_H
+#  include "config.h"
+#endif
 
 #include "httpd.h"
 #include "http_config.h"
@@ -41,7 +34,6 @@
     ap_log_rerror(APLOG_MARK, APLOG_NOTICE, 0,                         \
                   rec, "%s(%d) "format, __FILE__, __LINE__, ##args);
 
-
 #include "sundown/markdown.h"
 #include "sundown/html.h"
 #include "sundown/buffer.h"
@@ -53,8 +45,6 @@
 #define SUNDOWN_TAG "<body*>"
 #define SUNDOWN_LAYOUT_DEFAULT "layout"
 #define SUNDOWN_LAYOUT_EXT ".html"
-
-#define SUNDOWN_RAW_SUPPORT 1
 
 typedef struct {
     char *layout_path;
@@ -98,21 +88,21 @@ static apr_hash_t* parse_param_from_args(request_rec *r, char *args)
         return NULL;
     }
 
-    /* ハッシュマップの作成 */
+    /* create hash */
     hash = apr_hash_make(r->pool);
 
-    /* delim('&')でトークンに分割 */
+    /* parse '&' */
     for (items = apr_strtok(args, delim, &last);
          items != NULL;
          items = apr_strtok(NULL, delim, &last)) {
-        /* space 変換 */
+        /* convert space */
         for (st = items; *st; ++st) {
             if (*st == '+') {
                 *st = ' ';
             }
         }
 
-        /* key と value に分割 */
+        /* parse key, value */
         st = strchr(items, '=');
         if (st) {
             *st++ = '\0';
@@ -123,30 +113,29 @@ static apr_hash_t* parse_param_from_args(request_rec *r, char *args)
             ap_unescape_url(items);
         }
 
-        /* ハッシュの確認 */
+        /* check hash */
         values = apr_hash_get(hash, items, APR_HASH_KEY_STRING);
         if (values == NULL) {
-            /* apr_array_header_t の初期化 */
+            /* init apr_array_header_t */
             values = apr_array_make(r->pool, 1, sizeof(char*));
-            /* ハッシュに要素を追加 */
+            /* add hash */
             apr_hash_set(hash, items, APR_HASH_KEY_STRING, values);
         }
 
-        /* 配列に要素を追加 */
+        /* add array */
         *((char **)apr_array_push(values)) = apr_pstrdup(r->pool, st);
     }
 
     return hash;
 }
 
-static int output_layout_header(apr_file_t *fp, request_rec *r) {
+static int output_layout_header(request_rec *r, apr_file_t *fp) {
     char buf[HUGE_STRING_LEN];
     char *lower = NULL;
 
     while (apr_file_gets(buf, HUGE_STRING_LEN, fp) == APR_SUCCESS) {
         ap_rputs(buf, r);
 
-        /* 挿入ラインを検索 */
         lower = apr_pstrdup(r->pool, buf);
         ap_str_tolower(lower);
         if (apr_fnmatch("*"SUNDOWN_TAG"*", lower, APR_FNM_CASE_BLIND) == 0) {
@@ -157,17 +146,78 @@ static int output_layout_header(apr_file_t *fp, request_rec *r) {
     return 0;
 }
 
-static int output_layout_footer(apr_file_t *fp, request_rec *r) {
+static apr_file_t* layout_header(request_rec *r, char *filename) {
+    apr_status_t rc = -1;
+    apr_file_t *fp = NULL;
+    char *layout_file = NULL;
+    char *layout_filepath = NULL;
+    sundown_config_rec *cfg;
+
+    cfg = ap_get_module_config(r->per_dir_config, &sundown_module);
+
+    if (filename == NULL && cfg->layout_default != NULL) {
+        filename = cfg->layout_default;
+    }
+
+    if (filename != NULL) {
+        if (cfg->layout_path == NULL) {
+            ap_add_common_vars(r);
+            cfg->layout_path = (char *)apr_table_get(
+                r->subprocess_env, "DOCUMENT_ROOT");
+        }
+
+        layout_filepath = apr_psprintf(
+            r->pool, "%s/%s%s", cfg->layout_path, layout_file, cfg->layout_ext);
+
+        rc = apr_file_open(
+            &fp, layout_filepath,
+            APR_READ | APR_BINARY | APR_XTHREAD, APR_OS_DEFAULT, r->pool);
+        if (rc == APR_SUCCESS) {
+            if (output_layout_header(r, fp) != 1) {
+                apr_file_close(fp);
+                fp = NULL;
+            }
+        } else {
+            layout_filepath = apr_psprintf(
+                r->pool, "%s/%s%s",
+                cfg->layout_path, cfg->layout_default, cfg->layout_ext);
+
+            rc = apr_file_open(
+                &fp, layout_filepath,
+                APR_READ | APR_BINARY | APR_XTHREAD, APR_OS_DEFAULT, r->pool);
+            if (rc == APR_SUCCESS) {
+                if (output_layout_header(r, fp) != 1) {
+                    apr_file_close(fp);
+                    fp = NULL;
+                }
+            }
+        }
+    }
+
+    if (rc != APR_SUCCESS) {
+        ap_rputs("<!DOCTYPE html>\n", r);
+        ap_rputs("<html>\n", r);
+        ap_rputs("<head>\n", r);
+        ap_rputs("<title>Markdown</title>\n", r);
+        ap_rputs("</head>\n", r);
+        ap_rputs("<body>\n", r);
+    }
+
+    return fp;
+}
+
+static int layout_footer(request_rec *r, apr_file_t *fp) {
     char buf[HUGE_STRING_LEN];
 
-    if (fp == NULL) {
-        return 0;
+    if (fp != NULL) {
+        while (apr_file_gets(buf, HUGE_STRING_LEN, fp) == APR_SUCCESS) {
+            ap_rputs(buf, r);
+        }
+        apr_file_close(fp);
+    } else {
+        ap_rputs("</body>\n", r);
+        ap_rputs("</html>\n", r);
     }
-
-    while (apr_file_gets(buf, HUGE_STRING_LEN, fp) == APR_SUCCESS) {
-        ap_rputs(buf, r);
-    }
-    apr_file_close(fp);
 
     return 0;
 }
@@ -176,14 +226,10 @@ static int output_layout_footer(apr_file_t *fp, request_rec *r) {
 /* The sundown content handler */
 static int sundown_handler(request_rec *r)
 {
-    sundown_config_rec *cfg;
-
     apr_status_t rc;
     apr_file_t *fp = NULL;
     apr_size_t bytes_read;
     char *layout_file = NULL;
-    char *layout_filepath = NULL;
-    char buf[HUGE_STRING_LEN];
 
     /* sundown: markdown */
     struct buf *ib, *ob;
@@ -254,70 +300,40 @@ static int sundown_handler(request_rec *r)
 
     sdhtml_renderer(&callbacks, &options, 0);
 
-    /* TODO: configure settings */
-    //MKDEXT_NO_INTRA_EMPHASIS
-    //MKDEXT_AUTOLINK
-    //MKDEXT_STRIKETHROUGH
-    //MKDEXT_LAX_HTML_BLOCKS
-    //MKDEXT_SPACE_HEADERS
-    //MKDEXT_SUPERSCRIPT
-
-    //MKDEXT_TABLES => Enabled
-    //MKDEXT_FENCED_CODE => Enabled
-    markdown_extensions = MKDEXT_TABLES | MKDEXT_FENCED_CODE;
+    /* extensionss */
+    markdown_extensions = 0;
+#ifdef SUNDOWN_USE_FENCED_CODE
+    markdown_extensions = markdown_extensions | MKDEXT_FENCED_CODE;
+#endif
+#ifdef SUNDOWN_USE_NO_INTRA_EMPHASIS
+    markdown_extensions = markdown_extensions | MKDEXT_NO_INTRA_EMPHASIS;
+#endif
+#ifdef SUNDOWN_USE_AUTOLINK
+    markdown_extensions = markdown_extensions | MKDEXT_AUTOLINK;
+#endif
+#ifdef SUNDOWN_USE_STRIKETHROUGH
+    markdown_extensions = markdown_extensions | MKDEXT_STRIKETHROUGH;
+#endif
+#ifdef SUNDOWN_USE_LAX_HTML_BLOCKS
+    markdown_extensions = markdown_extensions | MKDEXT_LAX_HTML_BLOCKS;
+#endif
+#ifdef SUNDOWN_USE_SPACE_HEADERS
+    markdown_extensions = markdown_extensions | MKDEXT_SPACE_HEADERS;
+#endif
+#ifdef SUNDOWN_USE_SUPERSCRIPT
+    markdown_extensions = markdown_extensions | MKDEXT_TABLES;
+#endif
+#ifdef SUNDOWN_USE_FENCED_CODE
+    markdown_extensions = markdown_extensions | MKDEXT_FENCED_CODE;
+#endif
 
     markdown = sd_markdown_new(markdown_extensions, 16, &callbacks, &options);
 
     sd_markdown_render(ob, ib->data, ib->size, markdown);
     sd_markdown_free(markdown);
 
-    /* config */
-    cfg = ap_get_module_config(r->per_dir_config, &sundown_module);
-
-    //layout をパラメターから受け取る
-    if (layout_file == NULL) {
-        layout_file = cfg->layout_default;
-    }
-
-    if (cfg->layout_path == NULL) {
-        //DOCUMENT_ROOT パスを取得
-        ap_add_common_vars(r);
-        cfg->layout_path = (char *)apr_table_get(
-            r->subprocess_env, "DOCUMENT_ROOT");
-    }
-
-
-    layout_filepath = apr_psprintf(
-        r->pool, "%s/%s%s", cfg->layout_path, layout_file, cfg->layout_ext);
-
-    //_DEBUG(r, "layout_file:%s", layout_filepath);
-
-    /* output layout header part */
-    rc = apr_file_open(
-        &fp, layout_filepath,
-        APR_READ | APR_BINARY | APR_XTHREAD, APR_OS_DEFAULT, r->pool);
-    if (rc == APR_SUCCESS) {
-        if (output_layout_header(fp, r) != 1) {
-            apr_file_close(fp);
-            fp = NULL;
-        }
-    } else {
-        layout_filepath = apr_psprintf(
-            r->pool, "%s/%s%s",
-            cfg->layout_path, cfg->layout_default, cfg->layout_ext);
-
-        _DEBUG(r, ">> layout_file:%s", layout_filepath);
-
-        rc = apr_file_open(
-            &fp, layout_filepath,
-            APR_READ | APR_BINARY | APR_XTHREAD, APR_OS_DEFAULT, r->pool);
-        if (rc == APR_SUCCESS) {
-            if (output_layout_header(fp, r) != 1) {
-                apr_file_close(fp);
-                fp = NULL;
-            }
-        }
-    }
+    /* output layout header */
+    fp = layout_header(r, layout_file);
 
     /* writing the result */
     ap_rwrite(ob->data, ob->size, r);
@@ -326,8 +342,8 @@ static int sundown_handler(request_rec *r)
     bufrelease(ib);
     bufrelease(ob);
 
-    /* output layout footer part */
-    output_layout_footer(fp, r);
+    /* output layout footer */
+    layout_footer(r, fp);
 
     return OK;
 }
@@ -341,7 +357,7 @@ static void* sundown_create_dir_config(apr_pool_t *p, char *dir)
     memset(cfg, 0, sizeof(sundown_config_rec));
 
     cfg->layout_path = NULL;
-    cfg->layout_default = SUNDOWN_LAYOUT_DEFAULT;
+    cfg->layout_default = NULL;
     cfg->layout_ext = SUNDOWN_LAYOUT_EXT;
 
     return (void *)cfg;
