@@ -322,10 +322,13 @@ static int sundown_handler(request_rec *r)
     markdown_extensions = markdown_extensions | MKDEXT_SPACE_HEADERS;
 #endif
 #ifdef SUNDOWN_USE_SUPERSCRIPT
-    markdown_extensions = markdown_extensions | MKDEXT_TABLES;
+    markdown_extensions = markdown_extensions | MKDEXT_SUPERSCRIPT;
 #endif
 #ifdef SUNDOWN_USE_FENCED_CODE
     markdown_extensions = markdown_extensions | MKDEXT_FENCED_CODE;
+#endif
+#ifdef SUNDOWN_USE_TABLES
+    markdown_extensions = markdown_extensions | MKDEXT_TABLES;
 #endif
 
     markdown = sd_markdown_new(markdown_extensions, 16, &callbacks, &options);
