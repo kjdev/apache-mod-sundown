@@ -149,7 +149,6 @@ static int output_layout_header(request_rec *r, apr_file_t *fp) {
 static apr_file_t* layout_header(request_rec *r, char *filename) {
     apr_status_t rc = -1;
     apr_file_t *fp = NULL;
-    char *layout_file = NULL;
     char *layout_filepath = NULL;
     sundown_config_rec *cfg;
 
@@ -167,7 +166,7 @@ static apr_file_t* layout_header(request_rec *r, char *filename) {
         }
 
         layout_filepath = apr_psprintf(
-            r->pool, "%s/%s%s", cfg->layout_path, layout_file, cfg->layout_ext);
+            r->pool, "%s/%s%s", cfg->layout_path, filename, cfg->layout_ext);
 
         rc = apr_file_open(
             &fp, layout_filepath,
