@@ -1,17 +1,30 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT(mod_sundown, 0.0.1)
+AC_INIT(mod_sundown, 0.1.0,[])
 
 AC_CONFIG_SRCDIR([mod_sundown.c])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 
+AM_INIT_AUTOMAKE(mod_sundown, 0.1.0, [NO-DEFINE])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 
 # Checks for programs.
-AC_PROG_CC
+# AC_PROG_CC
 AC_PROG_LIBTOOL
+
+# Option for sundown debug log level
+AC_ARG_WITH(sundown-debug-log,
+  AC_HELP_STRING([--with-sundown-debug-log=LEVEL],
+    [sundown debug log level [default=no]]),
+  [SUNDOWN_DEBUG_LOG="${withval}"],
+  [SUNDOWN_DEBUG_LOG=no]
+)
+AS_IF([test "x${SUNDOWN_DEBUG_LOG}" != xno],
+    [AC_DEFINE_UNQUOTED([AP_SUNDOWN_DEBUG_LOG_LEVEL],
+      [${SUNDOWN_DEBUG_LOG}], [sundown debug log level])]
+)
 
 # Option for sundown extension
 AC_ARG_ENABLE(sundown-no_intra_emphasis,
@@ -105,7 +118,7 @@ AS_IF([test "x${ENABLED_SUNDOWN_RAW_SUPPORT}" = xyes],
     [AC_DEFINE([SUNDOWN_RAW_SUPPORT], [1], [enable raw support])]
 )
 
-# Checks for apxs
+# Checks for apxs.
 AC_ARG_WITH(apxs,
   [AC_HELP_STRING([--with-apxs=PATH], [apxs path [default=yes]])],
   [APXS_PATH="$withval"],
@@ -114,8 +127,8 @@ AC_ARG_WITH(apxs,
 
 AC_PATH_PROG(APXS, apxs, no, ${APXS_PATH})
 
-AS_IF([test "x${APXS}" = xno], AC_MSG_ERROR([apxs not found]),
-  [test "x${APXS}" = x], AC_MSG_ERROR([apxs not found])
+AS_IF([test "x${APXS}" = "xno"], AC_MSG_ERROR([apxs not found]),
+  [test "x${APXS}" = "x"], AC_MSG_ERROR([apxs not found])
 )
 
 APXS_CFLAGS=`${APXS} -q CFLAGS 2> /dev/null`
@@ -127,7 +140,7 @@ APXS_LIBEXECDIR=`${APXS} -q LIBEXECDIR 2> /dev/null`
 APXS_INCLUDEDIR=`${APXS} -q INCLUDEDIR 2> /dev/null`
 APXS_INCLUDES="-I${APXS_INCLUDEDIR}"
 
-# Checks for apr
+# Checks for apr.
 AC_ARG_WITH(apr,
   [AC_HELP_STRING([--with-apr=PATH], [apr config path [default=yes]])],
   [APR_CONFIG="$withval"],
@@ -135,7 +148,7 @@ AC_ARG_WITH(apr,
 )
 
 AC_MSG_CHECKING([whether apr])
-AS_IF([test "x$with_apr" != xno],
+AS_IF([test "x$with_apr" != "xno"],
   [
    if test ! -x "${APR_CONFIG}" -o -z "${APR_CONFIG}"; then
      APR_PATH=`${APXS} -q APR_BINDIR 2> /dev/null`
@@ -149,45 +162,44 @@ AS_IF([test "x$with_apr" != xno],
    APR_CPPFLAGS=`${APR_CONFIG} --cppflags 2> /dev/null`
    APR_LDFLAGS=`${APR_CONFIG} --ldflags 2> /dev/null`
    APR_LIBS=`${APR_CONFIG} --libs 2> /dev/null`
-   AC_MSG_RESULT(enable)
+   AC_MSG_RESULT(yes)
   ],
-  AC_MSG_RESULT(disable)
+  AC_MSG_ERROR(apr not found)
 )
 
-# Checks for apu
-AC_ARG_WITH(apu,
-  [AC_HELP_STRING([--with-apu=PATH], [apu config path [default=no]])],
-  [APU_CONFIG="$withval"],
-  [with_apu=no]
+# Checks for apreq2.
+AC_ARG_WITH(apreq2,
+  [AC_HELP_STRING([--with-apreq2=PATH], [apreq2 config path [default=yes]])],
+  [APREQ2_CONFIG="$withval"],
+  [with_apreq2=yes]
 )
 
-AC_MSG_CHECKING([whether apu])
-AS_IF([test "x$with_apu" != xno],
+AC_MSG_CHECKING([whether apreq2])
+AS_IF([test "x$with_apreq2" != "xno"],
   [
-   if test ! -x "${APU_CONFIG}" -o -z "${APU_CONFIG}"; then
-     APU_PATH=`${APXS} -q APU_BINDIR 2> /dev/null`
-     APU_CONFIG="${APU_PATH}/apu-1-config"
-     if test ! -x "${APU_CONFIG}"; then
-       APU_CONFIG="${APU_PATH}/apu-config"
-     fi
+   if test ! -x "${APREQ2_CONFIG}" -o -z "${APREQ2_CONFIG}"; then
+     SEARCH_PATH="/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin"
+     AC_PATH_PROG(APREQ2_CONFIG, apreq2-config, no, ${SEARCH_PATH})
+     AS_IF(
+       [test "x${APREQ2_CONFIG}" = "xno"], AC_MSG_ERROR([apreq2-config not found]),
+       [test "x${APREQ2_CONFIG}" = "x"], AC_MSG_ERROR([apreq2-config not found])
+     )
    fi
-   APU_INCLUDES=`${APU_CONFIG} --includes 2>/dev/null`
-   APU_CFLAGS=`${APU_CONFIG} --cflags 2> /dev/null`
-   APU_CPPFLAGS=`${APU_CONFIG} --cppflags 2> /dev/null`
-   APU_LDFLAGS=`${APU_CONFIG} --ldflags 2> /dev/null`
-   APU_LIBS=`${APU_CONFIG} --libs 2> /dev/null`
-   AC_MSG_RESULT(enable)
+   APREQ2_INCLUDES=`${APREQ2_CONFIG} --includes 2> /dev/null`
+   APREQ2_LDFLAGS=`${APREQ2_CONFIG} --ldflags 2> /dev/null`
+   APREQ2_LIBS=`${APREQ2_CONFIG} --libs 2> /dev/null`
+   AC_MSG_RESULT(yes)
   ],
-  AC_MSG_RESULT(disable)
+  AC_MSG_ERROR(apreq2 not found)
 )
 
-# Apache libraries
+# Apache libraries.
 APACHE_MODULEDIR="${APXS_LIBEXECDIR}"
-APACHE_INCLUDES="${APXS_INCLUDES} ${APR_INCLUDES} ${APU_INCLUDES}"
-APACHE_CFLAGS="${APXS_CFLAGS} ${APR_CFLAGS} ${APU_CFLAGS}"
-APACHE_CPPFLAGS="${APXS_CPPFLAGS} ${APR_CPPFLAGS} ${APU_CPPFLAGS}"
-APACHE_LDFLAGS="${APXS_LDFLAGS} ${APR_LDFLAGS} ${APU_LDFLAGS}"
-APACHE_LIBS="${APXS_LIBS} ${APR_LIBS} ${APU_LIBS}"
+APACHE_INCLUDES="${APXS_INCLUDES} ${APR_INCLUDES} ${APREQ2_INCLUDES}"
+APACHE_CFLAGS="${APXS_CFLAGS} ${APR_CFLAGS}"
+APACHE_CPPFLAGS="${APXS_CPPFLAGS} ${APR_CPPFLAGS}"
+APACHE_LDFLAGS="${APXS_LDFLAGS} ${APR_LDFLAGS} ${APREQ2_LDFLAGS}"
+APACHE_LIBS="${APXS_LIBS} ${APR_LIBS} ${APREQ2_LIBS}"
 
 AC_SUBST(APACHE_MODULEDIR)
 AC_SUBST(APACHE_INCLUDES)
@@ -195,6 +207,52 @@ AC_SUBST(APACHE_CFLAGS)
 AC_SUBST(APACHE_CPPFLAGS)
 AC_SUBST(APACHE_LDFLAGS)
 AC_SUBST(APACHE_LIBS)
+
+
+# Checks for curl.
+AC_ARG_WITH(curl,
+  [AC_HELP_STRING([--with-curl=PATH], [curl path [default=/usr/include]])],
+  [CURL_PATH="$withval"],
+  [CURL_PATH="/usr/include"]
+)
+
+AC_CHECK_FILE(
+  "${CURL_PATH}/curl/curl.h",
+  [CURL_INCLUDEDIR=${CURL_PATH}],
+  [AC_MSG_ERROR([Missing required curl header.])]
+)
+
+AC_ARG_WITH(curl-lib,
+  [AC_HELP_STRING([--with-curl-lib=PATH], [curl library path [default=no]])],
+  [CURL_LIBPATH="$withval"],
+  [CURL_LIBPATH="no"]
+)
+
+AS_IF([test "x${CURL_LIBPATH}" != "xno"],
+  CURL_LDFLAGS="-L${CURL_LIBPATH}"
+)
+
+AC_MSG_CHECKING([for curl library])
+SAVED_LDFLAGS=$LDFLAGS
+LDFLAGS="$LDFLAGS ${CURL_LDFLAGS} -lcurl"
+AC_LINK_IFELSE(
+  [AC_LANG_PROGRAM(
+    [#include "curl/curl.h"],
+    [CURL *curl])],
+  [CURL_LIBS="-lcurl"],
+  [AC_MSG_ERROR([Missing required curl library.])]
+)
+AC_MSG_RESULT(yes)
+LDFLAGS=$SAVED_LDFLAGS
+
+# curl libraries.
+CURL_INCLUDES="${CURL_INCLUDES}"
+CURL_LDFLAGS="${CURL_LDFLAGS} ${CURL_LIBS}"
+
+AC_SUBST(CURL_INCLUDES)
+AC_SUBST(CURL_LDFLAGS)
+AC_SUBST(CURLLIBS)
+
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

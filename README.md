@@ -36,19 +36,20 @@ apache path.
 
 * --with-apxs=PATH
 * --with-apr=PATH
+* --with-apreq2=PATH
 
 ## Configration ##
 
 httpd.conf:
 
     LoadModule sundown_module modules/mod_sundown.so
-    <Location /sundown>
-        AddHandler sundown .md
+    <Location /markdown>
+        SetHandler sundown
     </Location>
 
-## Layout ##
+## Style ##
 
-/var/www/layout/layout.html:
+/var/www/style/default.html:
 
     <!DOCTYPE html>
     <html>
@@ -63,22 +64,52 @@ httpd.conf:
 httpd.conf:
 
     LoadModule sundown_module modules/mod_sundown.so
-    <Location /sundown>
-        AddHandler sundown .md
-        SundownLayoutPath      /var/www/layout
-        SundownLayoutDefault   layout
-        SundownLayoutExtension .html
+    <Location /markdown>
+        SetHandler            sundown
+        SundownStylePath      /var/www/style
+        SundownStyleDefault   default
+        SundownStyleExtension .html
     </Location>
 
-This will expand the markdown file next to the line with the "<body>" of
-layout.html.
+This will expand the markdown file next to the line
+with the "<body>" of style.html.
 
-## Multiple ##
+### Multiple Style ##
 
-* /var/www/layout/layout.html
-* /var/www/layout/layout-2.html
+* /var/www/style/style.html
+* /var/www/style/style-2.html
 
 You can change the layout file by specifying the layout parameters.
 
-    http://localhot/readme.md?layout=layout
-    http://localhot/readme.md?layout=layout-2
+    http://localhot/markdown/readme.md?style=style
+    http://localhot/markdown/readme.md?style=style-2
+
+## URL ##
+
+You can also get the file from an external source
+by specifying the Markdown file to URL parameter.
+
+    http://localhot/markdown?url=https://raw.github.com/kjdev/apache-mod-sundown/master/README.md
+
+## Markdown ##
+
+You can also send a markdown Markdown content parameter. (Send to POST)
+
+    POST http://localhot/markdown
+
+form:
+
+    <form action="/markdown" method="post">
+        <textarea name="markdown"></textarea>
+        <input type="submit" />
+    </form>
+
+## Order ##
+
+Load the content in order.
+
+1. A local file
+2. Markdown Parameters
+3. URL parameters
+
+Output together.
