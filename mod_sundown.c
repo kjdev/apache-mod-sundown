@@ -9,6 +9,7 @@
 **    SundownStyleDefault   default
 **    SundownStyleExtension .html
 **    SundownPageDefault    /var/www/html/README.md
+**    SundownDirectoryIndex index.md
 **    <Location /sundown>
 **      SetHandler sundown
 **    </Location>
@@ -70,20 +71,22 @@
 #include "sundown/html.h"
 #include "sundown/buffer.h"
 
-#define SUNDOWN_READ_UNIT      1024
-#define SUNDOWN_OUTPUT_UNIT    64
-#define SUNDOWN_CURL_TIMEOUT   30
-#define SUNDOWN_TITLE_DEFAULT  "Markdown Proxy"
-#define SUNDOWN_CONTENT_TYPE   "text/html"
-#define SUNDOWN_TAG            "<body*>"
-#define SUNDOWN_STYLE_DEFAULT  "default"
-#define SUNDOWN_STYLE_EXT      ".html"
+#define SUNDOWN_READ_UNIT       1024
+#define SUNDOWN_OUTPUT_UNIT     64
+#define SUNDOWN_CURL_TIMEOUT    30
+#define SUNDOWN_TITLE_DEFAULT   "Markdown"
+#define SUNDOWN_CONTENT_TYPE    "text/html"
+#define SUNDOWN_TAG             "<body*>"
+#define SUNDOWN_STYLE_DEFAULT   "default"
+#define SUNDOWN_STYLE_EXT       ".html"
+#define SUNDOWN_DIRECTORY_INDEX "index.md"
 
 typedef struct {
     char *style_path;
     char *style_default;
     char *style_ext;
     char *page_default;
+    char *directory_index;
 } sundown_config_rec;
 
 module AP_MODULE_DECLARE_DATA sundown_module;
@@ -222,24 +225,29 @@ append_url_data(void *buffer, size_t size, size_t nmemb, void *user)
 }
 
 static int
-append_page_data(request_rec *r, struct buf *ib, char *filename)
+append_page_data(request_rec *r, struct buf *ib, char *name)
 {
     apr_status_t rc = -1;
     apr_file_t *fp = NULL;
     apr_size_t read;
+    char *filename = NULL;
+    sundown_config_rec *cfg;
 
-    if (filename == NULL) {
-        sundown_config_rec *cfg;
-        cfg = ap_get_module_config(r->per_dir_config, &sundown_module);
+    cfg = ap_get_module_config(r->per_dir_config, &sundown_module);
 
+    if (name == NULL) {
         if (!cfg->page_default) {
             return HTTP_NOT_FOUND;
         }
-
         filename = cfg->page_default;
-    } else if (strlen(filename) <= 0 ||
-               memcmp(filename + strlen(filename) - 1, "/", 1) == 0) {
-        return HTTP_FORBIDDEN;
+    } else if (strlen(name) <= 0 ||
+               memcmp(name + strlen(name) - 1, "/", 1) == 0) {
+        if (!cfg->directory_index) {
+            return HTTP_FORBIDDEN;
+        }
+        filename = apr_psprintf(r->pool, "%s%s", name, cfg->directory_index);
+    } else {
+        filename = name;
     }
 
     rc = apr_file_open(&fp, filename,
@@ -311,7 +319,7 @@ sundown_handler(request_rec *r)
         style = (char *)apreq_params_as_string(r->pool, params,
                                                "style", APREQ_JOIN_AS_IS);
 #ifdef SUNDOWN_RAW_SUPPORT
-        raw = apr_table_get(params, "raw");
+        raw = (char *)apr_table_get(params, "raw");
 #endif
         if (r->method_number == M_POST) {
             text = (char *)apreq_params_as_string(r->pool, params,
@@ -456,6 +464,7 @@ sundown_create_dir_config(apr_pool_t *p, char *dir)
     cfg->style_default = NULL;
     cfg->style_ext = SUNDOWN_STYLE_EXT;
     cfg->page_default = NULL;
+    cfg->directory_index = SUNDOWN_DIRECTORY_INDEX;
 
     return (void *)cfg;
 }
@@ -464,16 +473,19 @@ static const command_rec
 sundown_cmds[] = {
     AP_INIT_TAKE1("SundownStylePath", ap_set_string_slot,
                   (void *)APR_OFFSETOF(sundown_config_rec, style_path),
-                  OR_ALL, "sundown proxy style path"),
+                  OR_ALL, "sundown style path"),
     AP_INIT_TAKE1("SundownStyleDefault", ap_set_string_slot,
                   (void *)APR_OFFSETOF(sundown_config_rec, style_default),
-                  OR_ALL, "sundown proxy default style file name"),
+                  OR_ALL, "sundown default style file name"),
     AP_INIT_TAKE1("SundownStyleExtension", ap_set_string_slot,
                   (void *)APR_OFFSETOF(sundown_config_rec, style_ext),
-                  OR_ALL, "sundown proxy default style file extension"),
+                  OR_ALL, "sundown default style file extension"),
     AP_INIT_TAKE1("SundownPageDefault", ap_set_string_slot,
                   (void *)APR_OFFSETOF(sundown_config_rec, page_default),
-                  OR_ALL, "sundown proxy default page file"),
+                  OR_ALL, "sundown default page file"),
+    AP_INIT_TAKE1("SundownDirectoryIndex", ap_set_string_slot,
+                  (void *)APR_OFFSETOF(sundown_config_rec, directory_index),
+                  OR_ALL, "sundown directory index page"),
     {NULL}
 };
 
