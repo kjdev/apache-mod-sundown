@@ -225,7 +225,7 @@ append_url_data(void *buffer, size_t size, size_t nmemb, void *user)
 }
 
 static int
-append_page_data(request_rec *r, struct buf *ib, char *name)
+append_page_data(request_rec *r, struct buf *ib, char *name, int directory)
 {
     apr_status_t rc = -1;
     apr_file_t *fp = NULL;
@@ -242,7 +242,7 @@ append_page_data(request_rec *r, struct buf *ib, char *name)
         filename = cfg->page_default;
     } else if (strlen(name) <= 0 ||
                memcmp(name + strlen(name) - 1, "/", 1) == 0) {
-        if (!cfg->directory_index) {
+        if (!cfg->directory_index || !directory) {
             return HTTP_FORBIDDEN;
         }
         filename = apr_psprintf(r->pool, "%s%s", name, cfg->directory_index);
@@ -284,6 +284,7 @@ static int
 sundown_handler(request_rec *r)
 {
     int ret = -1;
+    int directory = 1;
     apr_file_t *fp = NULL;
     char *url = NULL;
     char *style = NULL;
@@ -332,7 +333,10 @@ sundown_handler(request_rec *r)
     bufgrow(ib, SUNDOWN_READ_UNIT);
 
     /* page */
-    append_page_data(r, ib, r->filename);
+    if (url || text) {
+        directory = 0;
+    }
+    append_page_data(r, ib, r->filename, directory);
 
     /* text */
     if (text && strlen(text) > 0) {
@@ -371,7 +375,7 @@ sundown_handler(request_rec *r)
 
     /* default page */
     if (ib->size == 0) {
-        ret = append_page_data(r, ib, NULL);
+        ret = append_page_data(r, ib, NULL, 0);
         if (ret != APR_SUCCESS) {
             bufrelease(ib);
             return ret;
