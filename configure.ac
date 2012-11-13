@@ -110,7 +110,7 @@ AS_IF([test "x${ENABLED_SUNDOWN_FENCED_CODE}" = xyes],
 # Option for sundown raw support
 AC_ARG_ENABLE(sundown-raw-support,
   AC_HELP_STRING([--enable-sundown-raw-support],
-    [enable sundown extenssion fenced code [default=no]]),
+    [enable sundown raw support [default=no]]),
   [ENABLED_SUNDOWN_RAW_SUPPORT="${enableval:-yes}"],
   [ENABLED_SUNDOWN_RAW_SUPPORT=no]
 )
@@ -233,7 +233,9 @@ AS_IF([test "x${CURL_LIBPATH}" != "xno"],
 )
 
 AC_MSG_CHECKING([for curl library])
+SAVED_CFLAGS=$CFLAGS
 SAVED_LDFLAGS=$LDFLAGS
+CFLAGS="$CFLAGS -I ${CURL_INCLUDEDIR}"
 LDFLAGS="$LDFLAGS ${CURL_LDFLAGS} -lcurl"
 AC_LINK_IFELSE(
   [AC_LANG_PROGRAM(
@@ -243,13 +245,16 @@ AC_LINK_IFELSE(
   [AC_MSG_ERROR([Missing required curl library.])]
 )
 AC_MSG_RESULT(yes)
+CFLAGS=$SAVED_CFLAGS
 LDFLAGS=$SAVED_LDFLAGS
 
 # curl libraries.
-CURL_INCLUDES="${CURL_INCLUDES}"
+CURL_CFLAGS="-I ${CURL_INCLUDES}"
+CURL_CPPFLAGS="${CURL_CFLAGS}"
 CURL_LDFLAGS="${CURL_LDFLAGS} ${CURL_LIBS}"
 
-AC_SUBST(CURL_INCLUDES)
+AC_SUBST(CURL_CFLAGS)
+AC_SUBST(CURL_CPPFLAGS)
 AC_SUBST(CURL_LDFLAGS)
 AC_SUBST(CURLLIBS)
 
