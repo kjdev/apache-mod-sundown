@@ -1,13 +1,13 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT(mod_sundown, 0.1.0,[])
+AC_INIT(mod_sundown, 0.1.1,[])
 
 AC_CONFIG_SRCDIR([mod_sundown.c])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 
-AM_INIT_AUTOMAKE(mod_sundown, 0.1.0, [NO-DEFINE])
+AM_INIT_AUTOMAKE(mod_sundown, 0.1.1, [NO-DEFINE])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 
 # Checks for programs.

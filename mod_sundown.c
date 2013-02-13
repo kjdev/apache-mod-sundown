@@ -11,6 +11,7 @@
 **    SundownPageDefault    /var/www/html/README.md
 **    SundownDirectoryIndex index.md
 **    <Location /sundown>
+**      # AddHandler sundown .md
 **      SetHandler sundown
 **    </Location>
 */
@@ -385,6 +386,7 @@ sundown_handler(request_rec *r)
     if (ib->size > 0) {
 #ifdef SUNDOWN_RAW_SUPPORT
         if (raw != NULL) {
+            r->content_type = "text/plain";
             ap_rwrite(ib->data, ib->size, r);
             bufrelease(ib);
             return OK;
@@ -419,9 +421,6 @@ sundown_handler(request_rec *r)
 #endif
 #ifdef SUNDOWN_USE_SUPERSCRIPT
         markdown_extensions = markdown_extensions | MKDEXT_SUPERSCRIPT;
-#endif
-#ifdef SUNDOWN_USE_FENCED_CODE
-        markdown_extensions = markdown_extensions | MKDEXT_FENCED_CODE;
 #endif
 #ifdef SUNDOWN_USE_TABLES
         markdown_extensions = markdown_extensions | MKDEXT_TABLES;
@@ -473,6 +472,46 @@ sundown_create_dir_config(apr_pool_t *p, char *dir)
     return (void *)cfg;
 }
 
+static void *
+sundown_merge_dir_config(apr_pool_t *p, void *base_conf, void *override_conf)
+{
+    sundown_config_rec *cfg = apr_pcalloc(p, sizeof(sundown_config_rec));
+    sundown_config_rec *base = (sundown_config_rec *)base_conf;
+    sundown_config_rec *override = (sundown_config_rec *)override_conf;
+
+    if (override->style_path && strlen(override->style_path) > 0) {
+        cfg->style_path = override->style_path;
+    } else {
+        cfg->style_path = base->style_path;
+    }
+
+    if (override->style_default && strlen(override->style_default) > 0) {
+        cfg->style_default = override->style_default;
+    } else {
+        cfg->style_default = base->style_default;
+    }
+
+    if (strcmp(override->style_ext, SUNDOWN_STYLE_EXT) != 0) {
+        cfg->style_ext = override->style_ext;
+    } else {
+        cfg->style_ext = base->style_ext;
+    }
+
+    if (override->page_default && strlen(override->page_default) > 0) {
+        cfg->page_default = override->page_default;
+    } else {
+        cfg->page_default = base->page_default;
+    }
+
+    if (strcmp(override->directory_index, SUNDOWN_DIRECTORY_INDEX) != 0) {
+        cfg->directory_index = override->directory_index;
+    } else {
+        cfg->directory_index = base->directory_index;
+    }
+
+    return (void *)cfg;
+}
+
 static const command_rec
 sundown_cmds[] = {
     AP_INIT_TAKE1("SundownStylePath", ap_set_string_slot,
@@ -503,7 +542,7 @@ module AP_MODULE_DECLARE_DATA sundown_module =
 {
     STANDARD20_MODULE_STUFF,
     sundown_create_dir_config, /* create per-dir    config structures */
-    NULL,                      /* merge  per-dir    config structures */
+    sundown_merge_dir_config,  /* merge  per-dir    config structures */
     NULL,                      /* create per-server config structures */
     NULL,                      /* merge  per-server config structures */
     sundown_cmds,              /* table of config file commands       */
