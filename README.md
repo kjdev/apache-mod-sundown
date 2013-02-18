@@ -4,7 +4,7 @@ mod_sundown is Markdown handler module for Apache HTTPD Server.
 
 ## Dependencies ##
 
-* [sundown](https://github.com/tanoku/sundown.git)
+* [sundown](https://github.com/vmg/sundown)
 
 ## Build ##
 
