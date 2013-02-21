@@ -13,6 +13,7 @@ AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 # Checks for programs.
 # AC_PROG_CC
 AC_PROG_LIBTOOL
+AM_PROG_AR
 
 # Option for sundown debug log level
 AC_ARG_WITH(sundown-debug-log,
