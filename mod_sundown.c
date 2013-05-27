@@ -425,6 +425,9 @@ sundown_handler(request_rec *r)
 #ifdef SUNDOWN_USE_TABLES
         markdown_extensions = markdown_extensions | MKDEXT_TABLES;
 #endif
+#ifdef SUNDOWN_USE_SKIP_LINEBREAK
+        options.flags = HTML_SKIP_LINEBREAK;
+#endif
 
         markdown = sd_markdown_new(markdown_extensions, 16,
                                    &callbacks, &options);

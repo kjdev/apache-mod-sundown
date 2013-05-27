@@ -320,6 +320,18 @@ rndr_paragraph(struct buf *ob, const struct buf *text, void *opaque)
 			rndr_linebreak(ob, opaque);
 			i++;
 		}
+    } else if (options->flags & HTML_SKIP_LINEBREAK) {
+        size_t org;
+        while (i < text->size) {
+            org = i;
+            while (i < text->size && text->data[i] != '\n')
+                i++;
+            if (i > org)
+                bufput(ob, text->data + org, i - org);
+            if (i >= text->size - 1)
+                break;
+            i++;
+        }
 	} else {
 		bufput(ob, &text->data[i], text->size - i);
 	}

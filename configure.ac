@@ -108,6 +108,16 @@ AS_IF([test "x${ENABLED_SUNDOWN_FENCED_CODE}" = xyes],
     [AC_DEFINE([SUNDOWN_USE_FENCED_CODE], [1], [enable fenced code])]
 )
 
+AC_ARG_ENABLE(sundown-skip-linebreak,
+  AC_HELP_STRING([--enable-sundown-skip-linebreak],
+    [enable sundown extenssion skip linebreak [default=no]]),
+  [ENABLED_SUNDOWN_SKIP_LINEBREAK="${enableval:-yes}"],
+  [ENABLED_SUNDOWN_SKIP_LINEBREAK=no]
+)
+AS_IF([test "x${ENABLED_SUNDOWN_SKIP_LINEBREAK}" = xyes],
+    [AC_DEFINE([SUNDOWN_USE_SKIP_LINEBREAK], [1], [enable skip linebreak])]
+)
+
 # Option for sundown raw support
 AC_ARG_ENABLE(sundown-raw-support,
   AC_HELP_STRING([--enable-sundown-raw-support],
