@@ -402,31 +402,37 @@ sundown_handler(request_rec *r)
         markdown_extensions = 0;
 
 #ifdef SUNDOWN_USE_FENCED_CODE
-        markdown_extensions = markdown_extensions | MKDEXT_FENCED_CODE;
+        markdown_extensions |= MKDEXT_FENCED_CODE;
 #endif
 #ifdef SUNDOWN_USE_NO_INTRA_EMPHASIS
-        markdown_extensions = markdown_extensions | MKDEXT_NO_INTRA_EMPHASIS;
+        markdown_extensions |= MKDEXT_NO_INTRA_EMPHASIS;
 #endif
 #ifdef SUNDOWN_USE_AUTOLINK
-        markdown_extensions = markdown_extensions | MKDEXT_AUTOLINK;
+        markdown_extensions |= MKDEXT_AUTOLINK;
 #endif
 #ifdef SUNDOWN_USE_STRIKETHROUGH
-        markdown_extensions = markdown_extensions | MKDEXT_STRIKETHROUGH;
+        markdown_extensions |= MKDEXT_STRIKETHROUGH;
 #endif
 #ifdef SUNDOWN_USE_LAX_HTML_BLOCKS
-        markdown_extensions = markdown_extensions | MKDEXT_LAX_HTML_BLOCKS;
+        markdown_extensions |= MKDEXT_LAX_HTML_BLOCKS;
 #endif
 #ifdef SUNDOWN_USE_SPACE_HEADERS
-        markdown_extensions = markdown_extensions | MKDEXT_SPACE_HEADERS;
+        markdown_extensions |= MKDEXT_SPACE_HEADERS;
 #endif
 #ifdef SUNDOWN_USE_SUPERSCRIPT
-        markdown_extensions = markdown_extensions | MKDEXT_SUPERSCRIPT;
+        markdown_extensions |= MKDEXT_SUPERSCRIPT;
 #endif
 #ifdef SUNDOWN_USE_TABLES
-        markdown_extensions = markdown_extensions | MKDEXT_TABLES;
+        markdown_extensions |= MKDEXT_TABLES;
+#endif
+#ifdef SUNDOWN_USE_SPECIAL_ATTRIBUTES
+        markdown_extensions |= MKDEXT_SPECIAL_ATTRIBUTES;
 #endif
 #ifdef SUNDOWN_USE_SKIP_LINEBREAK
-        options.flags = HTML_SKIP_LINEBREAK;
+        options.flags |= HTML_SKIP_LINEBREAK;
+#endif
+#ifdef SUNDOWN_USE_XHTML
+        options.flags |= HTML_USE_XHTML;
 #endif
 
         markdown = sd_markdown_new(markdown_extensions, 16,

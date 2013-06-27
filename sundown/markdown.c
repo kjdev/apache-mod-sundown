@@ -785,10 +785,10 @@ char_autolink_www(struct buf *ob, struct sd_markdown *rndr, uint8_t *data, size_
 		if (rndr->cb.normal_text) {
 			link_text = rndr_newbuf(rndr, BUFFER_SPAN);
 			rndr->cb.normal_text(link_text, link, rndr->opaque);
-			rndr->cb.link(ob, link_url, NULL, link_text, rndr->opaque);
+			rndr->cb.link(ob, link_url, NULL, link_text, NULL, rndr->opaque);
 			rndr_popbuf(rndr, BUFFER_SPAN);
 		} else {
-			rndr->cb.link(ob, link_url, NULL, link, rndr->opaque);
+			rndr->cb.link(ob, link_url, NULL, link, NULL, rndr->opaque);
 		}
 		rndr_popbuf(rndr, BUFFER_SPAN);
 	}
@@ -850,6 +850,8 @@ char_link(struct buf *ob, struct sd_markdown *rndr, uint8_t *data, size_t offset
 	size_t org_work_size = rndr->work_bufs[BUFFER_SPAN].size;
 	int text_has_nl = 0, ret = 0;
 	int in_title = 0, qtype = 0;
+    size_t attr_b = 0, attr_e = 0;
+    struct buf *attr = 0;
 
 	/* checking whether the correct renderer exists */
 	if ((is_img && !rndr->cb.image) || (!is_img && !rndr->cb.link))
@@ -1057,14 +1059,52 @@ char_link(struct buf *ob, struct sd_markdown *rndr, uint8_t *data, size_t offset
 		unscape_text(u_link, link);
 	}
 
+    if (rndr->ext_flags & MKDEXT_SPECIAL_ATTRIBUTES) {
+        if (i < size && data[i] == '{') {
+            /* skipping initial whitespace */
+            i++;
+
+            while (i < size && _isspace(data[i]))
+                i++;
+
+            attr_b = i;
+
+            while (i < size) {
+                if (data[i] == '\\') i += 2;
+                else if (data[i] == '}') break;
+                else if (i >= 1 && _isspace(data[i-1]) && (data[i] == '\'' || data[i] == '"')) break;
+                else i++;
+            }
+
+            if (i >= size) goto cleanup;
+            attr_e = i;
+
+            /* remove whitespace at the end of the attributes */
+            while (attr_e > attr_b && _isspace(data[attr_e - 1]))
+                attr_e--;
+
+            /* remove optional angle brackets around the attributes */
+            if (data[attr_b] == '<') attr_b++;
+            if (data[attr_e - 1] == '>') attr_e--;
+
+            /* building escaped attributes */
+            if (attr_e > attr_b) {
+                attr = rndr_newbuf(rndr, BUFFER_SPAN);
+                bufput(attr, data + attr_b, attr_e - attr_b);
+            }
+
+            i++;
+        }
+    }
+
 	/* calling the relevant rendering function */
 	if (is_img) {
 		if (ob->size && ob->data[ob->size - 1] == '!')
 			ob->size -= 1;
 
-		ret = rndr->cb.image(ob, u_link, title, content, rndr->opaque);
+		ret = rndr->cb.image(ob, u_link, title, content, attr, rndr->opaque);
 	} else {
-		ret = rndr->cb.link(ob, u_link, title, content, rndr->opaque);
+		ret = rndr->cb.link(ob, u_link, title, content, attr, rndr->opaque);
 	}
 
 	/* cleanup */
@@ -1529,7 +1569,7 @@ parse_paragraph(struct buf *ob, struct sd_markdown *rndr, uint8_t *data, size_t 
 		parse_inline(header_work, rndr, work.data, work.size);
 
 		if (rndr->cb.header)
-			rndr->cb.header(ob, header_work, (int)level, rndr->opaque);
+			rndr->cb.header(ob, header_work, (int)level, rndr->ext_flags & MKDEXT_SPECIAL_ATTRIBUTES, rndr->opaque);
 
 		rndr_popbuf(rndr, BUFFER_SPAN);
 	}
@@ -1811,7 +1851,7 @@ parse_atxheader(struct buf *ob, struct sd_markdown *rndr, uint8_t *data, size_t 
 		parse_inline(work, rndr, data + i, end - i);
 
 		if (rndr->cb.header)
-			rndr->cb.header(ob, work, (int)level, rndr->opaque);
+			rndr->cb.header(ob, work, (int)level, rndr->ext_flags & MKDEXT_SPECIAL_ATTRIBUTES, rndr->opaque);
 
 		rndr_popbuf(rndr, BUFFER_SPAN);
 	}

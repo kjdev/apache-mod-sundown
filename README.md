@@ -15,7 +15,7 @@ mod_sundown is Markdown handler module for Apache HTTPD Server.
 
 ### Build Options ###
 
-sundown library extensions (MKDEXT_).
+sundown library extensions.
 
 * --enable-sundown-no-intra-emphasis
 * --enable-sundown-autolink
@@ -25,6 +25,10 @@ sundown library extensions (MKDEXT_).
 * --enable-sundown-superscript
 * --enable-sundown-tables
 * --enable-sundown-fenced-code
+* --enable-sundown-special-attributes
+
+* --enable-sundown-skip-linebreak
+* --enable-sundown-xhtml
 
 markdown raw print.
 

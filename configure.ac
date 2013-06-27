@@ -118,6 +118,26 @@ AS_IF([test "x${ENABLED_SUNDOWN_SKIP_LINEBREAK}" = xyes],
     [AC_DEFINE([SUNDOWN_USE_SKIP_LINEBREAK], [1], [enable skip linebreak])]
 )
 
+AC_ARG_ENABLE(sundown-special-attributes,
+  AC_HELP_STRING([--enable-sundown-special-attributes],
+    [enable sundown extenssion special attributes [default=no]]),
+  [ENABLED_SUNDOWN_SPECIAL_ATTRIBUTES="${enableval:-yes}"],
+  [ENABLED_SUNDOWN_SPECIAL_ATTRIBUTES=no]
+)
+AS_IF([test "x${ENABLED_SUNDOWN_SPECIAL_ATTRIBUTES}" = xyes],
+    [AC_DEFINE([SUNDOWN_USE_SPECIAL_ATTRIBUTES], [1], [enable special attributes])]
+)
+
+AC_ARG_ENABLE(sundown-xhtml,
+  AC_HELP_STRING([--enable-sundown-xhtml],
+    [enable sundown extenssion xhtml [default=no]]),
+  [ENABLED_SUNDOWN_XHTML="${enableval:-yes}"],
+  [ENABLED_SUNDOWN_XHTML=no]
+)
+AS_IF([test "x${ENABLED_SUNDOWN_XHTML}" = xyes],
+    [AC_DEFINE([SUNDOWN_USE_XHTML], [1], [enable xhtml])]
+)
+
 # Option for sundown raw support
 AC_ARG_ENABLE(sundown-raw-support,
   AC_HELP_STRING([--enable-sundown-raw-support],

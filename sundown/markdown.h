@@ -59,6 +59,7 @@ enum mkd_extensions {
 	MKDEXT_SPACE_HEADERS = (1 << 6),
 	MKDEXT_SUPERSCRIPT = (1 << 7),
 	MKDEXT_LAX_SPACING = (1 << 8),
+	MKDEXT_SPECIAL_ATTRIBUTES = (1 << 9),
 };
 
 /* sd_callbacks - functions for rendering parsed data */
@@ -67,7 +68,7 @@ struct sd_callbacks {
 	void (*blockcode)(struct buf *ob, const struct buf *text, const struct buf *lang, void *opaque);
 	void (*blockquote)(struct buf *ob, const struct buf *text, void *opaque);
 	void (*blockhtml)(struct buf *ob,const  struct buf *text, void *opaque);
-	void (*header)(struct buf *ob, const struct buf *text, int level, void *opaque);
+	void (*header)(struct buf *ob, const struct buf *text, int level, int flags, void *opaque);
 	void (*hrule)(struct buf *ob, void *opaque);
 	void (*list)(struct buf *ob, const struct buf *text, int flags, void *opaque);
 	void (*listitem)(struct buf *ob, const struct buf *text, int flags, void *opaque);
@@ -82,9 +83,9 @@ struct sd_callbacks {
 	int (*codespan)(struct buf *ob, const struct buf *text, void *opaque);
 	int (*double_emphasis)(struct buf *ob, const struct buf *text, void *opaque);
 	int (*emphasis)(struct buf *ob, const struct buf *text, void *opaque);
-	int (*image)(struct buf *ob, const struct buf *link, const struct buf *title, const struct buf *alt, void *opaque);
+	int (*image)(struct buf *ob, const struct buf *link, const struct buf *title, const struct buf *alt, const struct buf *attr, void *opaque);
 	int (*linebreak)(struct buf *ob, void *opaque);
-	int (*link)(struct buf *ob, const struct buf *link, const struct buf *title, const struct buf *content, void *opaque);
+	int (*link)(struct buf *ob, const struct buf *link, const struct buf *title, const struct buf *content, const struct buf *attr, void *opaque);
 	int (*raw_html_tag)(struct buf *ob, const struct buf *tag, void *opaque);
 	int (*triple_emphasis)(struct buf *ob, const struct buf *text, void *opaque);
 	int (*strikethrough)(struct buf *ob, const struct buf *text, void *opaque);

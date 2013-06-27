@@ -73,6 +73,52 @@ static inline void escape_href(struct buf *ob, const uint8_t *source, size_t len
 /********************
  * GENERIC RENDERER *
  ********************/
+static void
+rndr_attributes(struct buf *ob, const uint8_t *buf, const size_t size,
+                void *opaque)
+{
+    size_t n, i = 0, j = 0;
+    int is_class = 0;
+
+    /* id */
+    do {
+        i++;
+    } while (i < size && buf[i-1] != '#');
+
+    if (i < size) {
+        n = i;
+        while (n < size && buf[n] != '#' && buf[n] != '.' && buf[n] != ' ') {
+            n++;
+        }
+        BUFPUTSL(ob, " id=\"");
+        escape_html(ob, buf + i, n - i);
+        bufputc(ob, '"');
+    }
+
+    /* class */
+    while (j < size) {
+        do {
+            j++;
+        } while (j < size && buf[j-1] != '.');
+        if (j < size) {
+            n = j;
+            while (n < size && buf[n] != '#' && buf[n] != '.' && buf[n] != ' ') {
+                n++;
+            }
+            bufputc(ob, ' ');
+            if (!is_class) {
+                BUFPUTSL(ob, "class=\"");
+                is_class = 1;
+            }
+            escape_html(ob, buf + j, n - j);
+        }
+        j++;
+    }
+    if (is_class) {
+        bufputc(ob, '"');
+    }
+}
+
 static int
 rndr_autolink(struct buf *ob, const struct buf *link, enum mkd_autolink type, void *opaque)
 {
@@ -121,27 +167,9 @@ rndr_blockcode(struct buf *ob, const struct buf *text, const struct buf *lang, v
 	if (ob->size) bufputc(ob, '\n');
 
 	if (lang && lang->size) {
-		size_t i, cls;
-		BUFPUTSL(ob, "<pre><code class=\"");
-
-		for (i = 0, cls = 0; i < lang->size; ++i, ++cls) {
-			while (i < lang->size && isspace(lang->data[i]))
-				i++;
-
-			if (i < lang->size) {
-				size_t org = i;
-				while (i < lang->size && !isspace(lang->data[i]))
-					i++;
-
-				if (lang->data[org] == '.')
-					org++;
-
-				if (cls) bufputc(ob, ' ');
-				escape_html(ob, lang->data + org, i - org);
-			}
-		}
-
-		BUFPUTSL(ob, "\">");
+        BUFPUTSL(ob, "<pre><code");
+        rndr_attributes(ob, lang->data, lang->size, opaque);
+        BUFPUTSL(ob, ">");
 	} else
 		BUFPUTSL(ob, "<pre><code>");
 
@@ -208,29 +236,54 @@ static int
 rndr_linebreak(struct buf *ob, void *opaque)
 {
 	struct html_renderopt *options = opaque;
-	bufputs(ob, USE_XHTML(options) ? "<br/>\n" : "<br>\n");
+    bufputs(ob, USE_XHTML(options) ? "<br />\n" : "<br>\n");
 	return 1;
 }
 
 static void
-rndr_header(struct buf *ob, const struct buf *text, int level, void *opaque)
+rndr_header(struct buf *ob, const struct buf *text, int level, int flags, void *opaque)
 {
 	struct html_renderopt *options = opaque;
+    size_t size = text->size, start = 0, end = 0;
 
 	if (ob->size)
 		bufputc(ob, '\n');
 
-	if (options->flags & HTML_TOC)
+    if (flags && size && text->data[size-1] == '}') {
+        while (size && text->data[size] != '{')
+            size--;
+
+        start = size + 1;
+        end = text->size - 1;
+
+        while (size && text->data[size-1] == ' ')
+            size--;
+    }
+
+    if (size && text->data[size-1] == '#') {
+        while (size && text->data[size-1] == '#')
+            size--;
+        while (size && text->data[size-1] == ' ')
+            size--;
+    }
+
+    if (start && end)
+    {
+        bufprintf(ob, "<h%d", level);
+        rndr_attributes(ob, text->data + start, end - start, opaque);
+        bufputc(ob, '>');
+    }
+    else if (options->flags & HTML_TOC)
 		bufprintf(ob, "<h%d id=\"toc_%d\">", level, options->toc_data.header_count++);
 	else
 		bufprintf(ob, "<h%d>", level);
 
-	if (text) bufput(ob, text->data, text->size);
+	if (text) bufput(ob, text->data, size);
 	bufprintf(ob, "</h%d>\n", level);
 }
 
 static int
-rndr_link(struct buf *ob, const struct buf *link, const struct buf *title, const struct buf *content, void *opaque)
+rndr_link(struct buf *ob, const struct buf *link, const struct buf *title, const struct buf *content, const struct buf *attr, void *opaque)
 {
 	struct html_renderopt *options = opaque;
 
@@ -251,6 +304,10 @@ rndr_link(struct buf *ob, const struct buf *link, const struct buf *title, const
 		bufputc(ob, '\"');
 		options->link_attributes(ob, link, opaque);
 		bufputc(ob, '>');
+    } else if (attr && attr->size) {
+        bufputc(ob, '"');
+        rndr_attributes(ob, attr->data, attr->size, opaque);
+        bufputc(ob, '>');
 	} else {
 		BUFPUTSL(ob, "\">");
 	}
@@ -330,6 +387,8 @@ rndr_paragraph(struct buf *ob, const struct buf *text, void *opaque)
                 bufput(ob, text->data + org, i - org);
             if (i >= text->size - 1)
                 break;
+            if (text->data[i] == '\n' && isascii(text->data[i-1]))
+                BUFPUTSL(ob, " ");
             i++;
         }
 	} else {
@@ -368,11 +427,11 @@ rndr_hrule(struct buf *ob, void *opaque)
 {
 	struct html_renderopt *options = opaque;
 	if (ob->size) bufputc(ob, '\n');
-	bufputs(ob, USE_XHTML(options) ? "<hr/>\n" : "<hr>\n");
+    bufputs(ob, USE_XHTML(options) ? "<hr />\n" : "<hr>\n");
 }
 
 static int
-rndr_image(struct buf *ob, const struct buf *link, const struct buf *title, const struct buf *alt, void *opaque)
+rndr_image(struct buf *ob, const struct buf *link, const struct buf *title, const struct buf *alt, const struct buf *attr, void *opaque)
 {
 	struct html_renderopt *options = opaque;
 	if (!link || !link->size) return 0;
@@ -388,7 +447,12 @@ rndr_image(struct buf *ob, const struct buf *link, const struct buf *title, cons
 		BUFPUTSL(ob, "\" title=\"");
 		escape_html(ob, title->data, title->size); }
 
-	bufputs(ob, USE_XHTML(options) ? "\"/>" : "\">");
+    bufputc(ob, '"');
+    if (attr && attr->size) {
+        rndr_attributes(ob, attr->data, attr->size, opaque);
+    }
+
+    bufputs(ob, USE_XHTML(options) ? " />" : ">");
 	return 1;
 }
 
@@ -499,7 +563,7 @@ rndr_normal_text(struct buf *ob, const struct buf *text, void *opaque)
 }
 
 static void
-toc_header(struct buf *ob, const struct buf *text, int level, void *opaque)
+toc_header(struct buf *ob, const struct buf *text, int level, int flags, void *opaque)
 {
 	struct html_renderopt *options = opaque;
 
@@ -533,7 +597,7 @@ toc_header(struct buf *ob, const struct buf *text, int level, void *opaque)
 }
 
 static int
-toc_link(struct buf *ob, const struct buf *link, const struct buf *title, const struct buf *content, void *opaque)
+toc_link(struct buf *ob, const struct buf *link, const struct buf *title, const struct buf *content, const struct buf *attr, void *opaque)
 {
 	if (content && content->size)
 		bufput(ob, content->data, content->size);
