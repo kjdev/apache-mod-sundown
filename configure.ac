@@ -1,13 +1,13 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT(mod_sundown, 0.1.1,[])
+AC_INIT(mod_sundown, 0.2.0,[])
 
 AC_CONFIG_SRCDIR([mod_sundown.c])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 
-AM_INIT_AUTOMAKE(mod_sundown, 0.1.1, [NO-DEFINE])
+AM_INIT_AUTOMAKE(mod_sundown, 0.2.0, [NO-DEFINE])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 
 # Checks for programs.
@@ -138,6 +138,16 @@ AS_IF([test "x${ENABLED_SUNDOWN_XHTML}" = xyes],
     [AC_DEFINE([SUNDOWN_USE_XHTML], [1], [enable xhtml])]
 )
 
+AC_ARG_ENABLE(sundown-toc,
+  AC_HELP_STRING([--enable-sundown-toc],
+    [enable sundown extenssion toc [default=no]]),
+  [ENABLED_SUNDOWN_TOC="${enableval:-yes}"],
+  [ENABLED_SUNDOWN_TOC=no]
+)
+AS_IF([test "x${ENABLED_SUNDOWN_TOC}" = xyes],
+    [AC_DEFINE([SUNDOWN_USE_TOC], [1], [enable xhtml])]
+)
+
 # Option for sundown raw support
 AC_ARG_ENABLE(sundown-raw-support,
   AC_HELP_STRING([--enable-sundown-raw-support],
@@ -147,6 +157,17 @@ AC_ARG_ENABLE(sundown-raw-support,
 )
 AS_IF([test "x${ENABLED_SUNDOWN_RAW_SUPPORT}" = xyes],
     [AC_DEFINE([SUNDOWN_RAW_SUPPORT], [1], [enable raw support])]
+)
+
+# Option for sundown toc support
+AC_ARG_ENABLE(sundown-toc-support,
+  AC_HELP_STRING([--enable-sundown-toc-support],
+    [enable sundown toc support [default=no]]),
+  [ENABLED_SUNDOWN_TOC_SUPPORT="${enableval:-yes}"],
+  [ENABLED_SUNDOWN_TOC_SUPPORT=no]
+)
+AS_IF([test "x${ENABLED_SUNDOWN_TOC_SUPPORT}" = xyes],
+    [AC_DEFINE([SUNDOWN_TOC_SUPPORT], [1], [enable toc support])]
 )
 
 # Checks for apxs.

@@ -73,7 +73,7 @@ static inline void escape_href(struct buf *ob, const uint8_t *source, size_t len
 /********************
  * GENERIC RENDERER *
  ********************/
-static void
+static int
 rndr_attributes(struct buf *ob, const uint8_t *buf, const size_t size,
                 void *opaque)
 {
@@ -117,6 +117,8 @@ rndr_attributes(struct buf *ob, const uint8_t *buf, const size_t size,
     if (is_class) {
         bufputc(ob, '"');
     }
+
+    return is_class;
 }
 
 static int
@@ -168,8 +170,25 @@ rndr_blockcode(struct buf *ob, const struct buf *text, const struct buf *lang, v
 
 	if (lang && lang->size) {
         BUFPUTSL(ob, "<pre><code");
-        rndr_attributes(ob, lang->data, lang->size, opaque);
-        BUFPUTSL(ob, ">");
+        if (rndr_attributes(ob, lang->data, lang->size, opaque) == 0) {
+            size_t i, cls;
+            BUFPUTSL(ob, " class=\"");
+            for (i = 0, cls = 0; i < lang->size; ++i, ++cls) {
+                while (i < lang->size && isspace(lang->data[i]))
+                    i++;
+                if (i < lang->size) {
+                    size_t org = i;
+                    while (i < lang->size && !isspace(lang->data[i]))
+                        i++;
+                    if (lang->data[org] == '.')
+                        org++;
+                    if (cls) bufputc(ob, ' ');
+                    escape_html(ob, lang->data + org, i - org);
+                }
+            }
+            bufputc(ob, '"');
+        }
+        bufputc(ob, '>');
 	} else
 		BUFPUTSL(ob, "<pre><code>");
 
@@ -250,8 +269,9 @@ rndr_header(struct buf *ob, const struct buf *text, int level, int flags, void *
 		bufputc(ob, '\n');
 
     if (flags && size && text->data[size-1] == '}') {
-        while (size && text->data[size] != '{')
+        do {
             size--;
+        } while (size && text->data[size] != '{');
 
         start = size + 1;
         end = text->size - 1;
@@ -566,6 +586,17 @@ static void
 toc_header(struct buf *ob, const struct buf *text, int level, int flags, void *opaque)
 {
 	struct html_renderopt *options = opaque;
+    size_t size = text->size, start = 0, end = 0;
+
+    if (options->toc_data.begin_level && level < options->toc_data.begin_level) {
+        options->toc_data.header_count++;
+        return;
+    } else if (options->toc_data.end_level &&
+               options->toc_data.end_level >= options->toc_data.begin_level &&
+               level > options->toc_data.end_level) {
+        options->toc_data.header_count++;
+        return;
+    }
 
 	/* set the level offset if this is the first header
 	 * we're parsing for the document */
@@ -576,7 +607,12 @@ toc_header(struct buf *ob, const struct buf *text, int level, int flags, void *o
 
 	if (level > options->toc_data.current_level) {
 		while (level > options->toc_data.current_level) {
-			BUFPUTSL(ob, "<ul>\n<li>\n");
+            if (options->toc_data.is_class) {
+                BUFPUTSL(ob, "<ul>\n<li>\n");
+            } else {
+                BUFPUTSL(ob, "<ul class=\"toc\">\n<li>\n");
+                options->toc_data.is_class = 1;
+            }
 			options->toc_data.current_level++;
 		}
 	} else if (level < options->toc_data.current_level) {
@@ -590,9 +626,46 @@ toc_header(struct buf *ob, const struct buf *text, int level, int flags, void *o
 		BUFPUTSL(ob,"</li>\n<li>\n");
 	}
 
-	bufprintf(ob, "<a href=\"#toc_%d\">", options->toc_data.header_count++);
+    if (flags && size && text->data[size-1] == '}') {
+        do {
+            size--;
+        } while (size && text->data[size] != '{');
+
+        start = size + 1;
+        end = text->size - 1;
+
+        while (size && text->data[size-1] == ' ')
+            size--;
+    }
+
+    if (size && text->data[size-1] == '#') {
+        while (size && text->data[size-1] == '#')
+            size--;
+        while (size && text->data[size-1] == ' ')
+            size--;
+    }
+
+    if (start && end) {
+        size_t n, i = start;
+        do {
+            i++;
+        } while (i < end && text->data[i-1] != '#');
+        if (i < end) {
+            n = i;
+            while (n < end && text->data[n] != '#' &&
+                   text->data[n] != '.' && text->data[n] != ' ') {
+                n++;
+            }
+            BUFPUTSL(ob, "<a href=\"#");
+            escape_html(ob, text->data + i, n - i);
+            BUFPUTSL(ob, "\">");
+        }
+    } else {
+        bufprintf(ob, "<a href=\"#toc_%d\">", options->toc_data.header_count++);
+    }
+
 	if (text)
-		escape_html(ob, text->data, text->size);
+		escape_html(ob, text->data, size);
 	BUFPUTSL(ob, "</a>\n");
 }
 

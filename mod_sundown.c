@@ -291,6 +291,7 @@ sundown_handler(request_rec *r)
     char *style = NULL;
     char *text = NULL;
     char *raw = NULL;
+    char *toc = NULL;
     apreq_handle_t *apreq;
     apr_table_t *params;
 
@@ -322,6 +323,9 @@ sundown_handler(request_rec *r)
                                                "style", APREQ_JOIN_AS_IS);
 #ifdef SUNDOWN_RAW_SUPPORT
         raw = (char *)apr_table_get(params, "raw");
+#endif
+#ifdef SUNDOWN_TOC_SUPPORT
+        toc = (char *)apr_table_get(params, "toc");
 #endif
         if (r->method_number == M_POST) {
             text = (char *)apreq_params_as_string(r->pool, params,
@@ -393,14 +397,11 @@ sundown_handler(request_rec *r)
         }
 #endif
 
-        /* performing markdown parsing */
-        ob = bufnew(SUNDOWN_OUTPUT_UNIT);
+        /* output style header */
+        fp = style_header(r, style);
 
-        sdhtml_renderer(&callbacks, &options, 0);
-
-        /* extensionss */
+        /* markdown extensions */
         markdown_extensions = 0;
-
 #ifdef SUNDOWN_USE_FENCED_CODE
         markdown_extensions |= MKDEXT_FENCED_CODE;
 #endif
@@ -428,11 +429,77 @@ sundown_handler(request_rec *r)
 #ifdef SUNDOWN_USE_SPECIAL_ATTRIBUTES
         markdown_extensions |= MKDEXT_SPECIAL_ATTRIBUTES;
 #endif
+
+#if defined(SUNDOWN_TOC_SUPPORT) || defined(SUNDOWN_USE_TOC)
+        /* toc */
+#ifdef SUNDOWN_USE_TOC
+        if (toc == NULL) {
+            toc = "";
+        }
+#endif
+        if (toc != NULL) {
+            size_t len = strlen(toc);
+            int n, begin = 2, end = 0;
+
+            if (len > 0) {
+                char *delim, *toc_b = NULL, *toc_e = NULL;
+                delim = strstr(toc, ":");
+                if (delim) {
+                    int i = delim - toc;
+                    toc_b = apr_pstrndup(r->pool, toc, i++);
+                    n = atoi(toc_b);
+                    if (n) {
+                        begin = n;
+                    }
+
+                    toc_e = apr_pstrndup(r->pool, toc + i, len - i);
+                    n = atoi(toc_e);
+                    if (n) {
+                        end = n;
+                    }
+                } else {
+                    n = atoi(toc);
+                    if (n) {
+                        begin = n;
+                    }
+                }
+            }
+
+            ob = bufnew(SUNDOWN_OUTPUT_UNIT);
+
+            sdhtml_toc_renderer(&callbacks, &options);
+
+            options.toc_data.begin_level = begin;
+            if (end) {
+                options.toc_data.end_level = end;
+            }
+
+            markdown = sd_markdown_new(markdown_extensions, 16,
+                                       &callbacks, &options);
+
+            sd_markdown_render(ob, ib->data, ib->size, markdown);
+            sd_markdown_free(markdown);
+
+            ap_rwrite(ob->data, ob->size, r);
+
+            bufrelease(ob);
+        }
+#endif
+
+        /* performing markdown parsing */
+        ob = bufnew(SUNDOWN_OUTPUT_UNIT);
+
+        /* markdown render */
+        sdhtml_renderer(&callbacks, &options, 0);
+
 #ifdef SUNDOWN_USE_SKIP_LINEBREAK
         options.flags |= HTML_SKIP_LINEBREAK;
 #endif
 #ifdef SUNDOWN_USE_XHTML
         options.flags |= HTML_USE_XHTML;
+#endif
+#ifdef SUNDOWN_TOC_SUPPORT
+        options.flags |= HTML_TOC;
 #endif
 
         markdown = sd_markdown_new(markdown_extensions, 16,
@@ -440,9 +507,6 @@ sundown_handler(request_rec *r)
 
         sd_markdown_render(ob, ib->data, ib->size, markdown);
         sd_markdown_free(markdown);
-
-        /* output style header */
-        fp = style_header(r, style);
 
         /* writing the result */
         ap_rwrite(ob->data, ob->size, r);

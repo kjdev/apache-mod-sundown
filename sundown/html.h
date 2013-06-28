@@ -30,6 +30,9 @@ struct html_renderopt {
 		int header_count;
 		int current_level;
 		int level_offset;
+		int begin_level;
+		int end_level;
+		int is_class;
 	} toc_data;
 
 	unsigned int flags;
