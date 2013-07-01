@@ -508,10 +508,13 @@ rndr_raw_html(struct buf *ob, const struct buf *text, void *opaque)
 }
 
 static void
-rndr_table(struct buf *ob, const struct buf *header, const struct buf *body, void *opaque)
+rndr_table(struct buf *ob, const struct buf *header, const struct buf *attr, const struct buf *body, void *opaque)
 {
 	if (ob->size) bufputc(ob, '\n');
-	BUFPUTSL(ob, "<table><thead>\n");
+    BUFPUTSL(ob, "<table");
+    if (attr)
+        rndr_attributes(ob, attr->data, attr->size, opaque);
+    BUFPUTSL(ob, "><thead>\n");
 	if (header)
 		bufput(ob, header->data, header->size);
 	BUFPUTSL(ob, "</thead><tbody>\n");

@@ -33,6 +33,7 @@
 
 #define BUFFER_BLOCK 0
 #define BUFFER_SPAN 1
+#define BUFFER_ATTRIBUTE 2
 
 #define MKD_LI_END 8	/* internal list flag */
 
@@ -112,7 +113,7 @@ struct sd_markdown {
 
 	struct link_ref *refs[REF_TABLE_SIZE];
 	uint8_t active_char[256];
-	struct stack work_bufs[2];
+	struct stack work_bufs[3];
 	unsigned int ext_flags;
 	size_t max_nesting;
 	int in_link_body;
@@ -125,7 +126,7 @@ struct sd_markdown {
 static inline struct buf *
 rndr_newbuf(struct sd_markdown *rndr, int type)
 {
-	static const size_t buf_size[2] = {256, 64};
+	static const size_t buf_size[3] = {256, 64, 64};
 	struct buf *work = NULL;
 	struct stack *pool = &rndr->work_bufs[type];
 
@@ -2079,6 +2080,7 @@ parse_table_row(
 static size_t
 parse_table_header(
 	struct buf *ob,
+    struct buf *attr,
 	struct sd_markdown *rndr,
 	uint8_t *data,
 	size_t size,
@@ -2106,6 +2108,22 @@ parse_table_header(
 
 	if (header_end && data[header_end - 1] == '|')
 		pipes--;
+
+    if (rndr->ext_flags & MKDEXT_SPECIAL_ATTRIBUTES) {
+        if (header_end && data[header_end - 1] == '}') {
+            size_t n = header_end - 1;
+            while (n > 0 && data[n] != '{')
+                n--;
+
+            bufput(attr, &data[n+1], header_end - n - 2);
+
+            while (n > 0 && _isspace(data[n-1]))
+                n--;
+
+            if (n && data[n - 1] == '|')
+                pipes--;
+        }
+    }
 
 	*columns = pipes + 1;
 	*column_data = calloc(*columns, sizeof(int));
@@ -2176,14 +2194,16 @@ parse_table(
 
 	struct buf *header_work = 0;
 	struct buf *body_work = 0;
+    struct buf *attr_work = 0;
 
 	size_t columns;
 	int *col_data = NULL;
 
 	header_work = rndr_newbuf(rndr, BUFFER_SPAN);
 	body_work = rndr_newbuf(rndr, BUFFER_BLOCK);
+    attr_work = rndr_newbuf(rndr, BUFFER_ATTRIBUTE);
 
-	i = parse_table_header(header_work, rndr, data, size, &columns, &col_data);
+	i = parse_table_header(header_work, attr_work, rndr, data, size, &columns, &col_data);
 	if (i > 0) {
 
 		while (i < size) {
@@ -2214,12 +2234,13 @@ parse_table(
 		}
 
 		if (rndr->cb.table)
-			rndr->cb.table(ob, header_work, body_work, rndr->opaque);
+			rndr->cb.table(ob, header_work, attr_work, body_work, rndr->opaque);
 	}
 
 	free(col_data);
 	rndr_popbuf(rndr, BUFFER_SPAN);
 	rndr_popbuf(rndr, BUFFER_BLOCK);
+    rndr_popbuf(rndr, BUFFER_ATTRIBUTE);
 	return i;
 }
 
@@ -2452,6 +2473,7 @@ sd_markdown_new(
 
 	stack_init(&md->work_bufs[BUFFER_BLOCK], 4);
 	stack_init(&md->work_bufs[BUFFER_SPAN], 8);
+    stack_init(&md->work_bufs[BUFFER_ATTRIBUTE], 1);
 
 	memset(md->active_char, 0x0, 256);
 
@@ -2579,8 +2601,12 @@ sd_markdown_free(struct sd_markdown *md)
 	for (i = 0; i < (size_t)md->work_bufs[BUFFER_BLOCK].asize; ++i)
 		bufrelease(md->work_bufs[BUFFER_BLOCK].item[i]);
 
+    for (i = 0; i < (size_t)md->work_bufs[BUFFER_ATTRIBUTE].asize; ++i)
+        bufrelease(md->work_bufs[BUFFER_ATTRIBUTE].item[i]);
+
 	stack_free(&md->work_bufs[BUFFER_SPAN]);
 	stack_free(&md->work_bufs[BUFFER_BLOCK]);
+    stack_free(&md->work_bufs[BUFFER_ATTRIBUTE]);
 
 	free(md);
 }
