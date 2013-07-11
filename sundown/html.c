@@ -668,7 +668,7 @@ toc_header(struct buf *ob, const struct buf *text, int level, int flags, void *o
     }
 
 	if (text)
-		escape_html(ob, text->data, size);
+        bufput(ob, text->data, size);
 	BUFPUTSL(ob, "</a>\n");
 }
 
