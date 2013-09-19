@@ -30,6 +30,7 @@ sundown library extensions.
 * --enable-sundown-skip-linebreak
 * --enable-sundown-xhtml
 * --enable-sundown-toc
+* --enable-sundown-task-list
 
 markdown raw print.
 

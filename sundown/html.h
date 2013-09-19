@@ -33,6 +33,7 @@ struct html_renderopt {
 		int begin_level;
 		int end_level;
 		int is_class;
+		char *class;
 	} toc_data;
 
 	unsigned int flags;
@@ -53,6 +54,7 @@ typedef enum {
 	HTML_USE_XHTML = (1 << 8),
 	HTML_ESCAPE = (1 << 9),
 	HTML_SKIP_LINEBREAK = (1 << 10),
+	HTML_USE_TASK_LIST = (1 << 11),
 } html_render_mode;
 
 typedef enum {

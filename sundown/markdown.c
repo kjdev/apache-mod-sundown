@@ -388,6 +388,35 @@ parse_inline(struct buf *ob, struct sd_markdown *rndr, uint8_t *data, size_t siz
 	}
 }
 
+static void parse_attributes(struct buf *text, struct buf *attr, int is_header)
+{
+    size_t size = text->size, begin = 0, end = 0;
+
+    if (size && text->data[size-1] == '}') {
+        do {
+            size--;
+        } while (size && text->data[size] != '{');
+
+        begin = size + 1;
+        end = text->size - 1;
+
+        while (size && text->data[size-1] == ' ')
+            size--;
+    }
+
+    if (is_header && size && text->data[size-1] == '#') {
+        while (size && text->data[size-1] == '#')
+            size--;
+        while (size && text->data[size-1] == ' ')
+            size--;
+    }
+
+    if (begin && end) {
+        bufput(attr, text->data + begin, end - begin);
+        text->size = size;
+    }
+}
+
 /* find_emph_char • looks for the next emph uint8_t, skipping other constructs */
 static size_t
 find_emph_char(uint8_t *data, size_t size, uint8_t c)
@@ -1539,6 +1568,7 @@ parse_paragraph(struct buf *ob, struct sd_markdown *rndr, uint8_t *data, size_t 
 		rndr_popbuf(rndr, BUFFER_BLOCK);
 	} else {
 		struct buf *header_work;
+        struct buf *attr_work;
 
 		if (work.size) {
 			size_t beg;
@@ -1567,12 +1597,17 @@ parse_paragraph(struct buf *ob, struct sd_markdown *rndr, uint8_t *data, size_t 
 		}
 
 		header_work = rndr_newbuf(rndr, BUFFER_SPAN);
+        attr_work = rndr_newbuf(rndr, BUFFER_ATTRIBUTE);
 		parse_inline(header_work, rndr, work.data, work.size);
 
-		if (rndr->cb.header)
-			rndr->cb.header(ob, header_work, (int)level, rndr->ext_flags & MKDEXT_SPECIAL_ATTRIBUTES, rndr->opaque);
-
+		if (rndr->cb.header) {
+            if (rndr->ext_flags & MKDEXT_SPECIAL_ATTRIBUTES) {
+                parse_attributes(header_work, attr_work, 1);
+            }
+            rndr->cb.header(ob, header_work, attr_work, (int)level, rndr->opaque);
+        }
 		rndr_popbuf(rndr, BUFFER_SPAN);
+        rndr_popbuf(rndr, BUFFER_ATTRIBUTE);
 	}
 
 	return end;
@@ -1669,7 +1704,7 @@ parse_blockcode(struct buf *ob, struct sd_markdown *rndr, uint8_t *data, size_t 
 static size_t
 parse_listitem(struct buf *ob, struct sd_markdown *rndr, uint8_t *data, size_t size, int *flags)
 {
-	struct buf *work = 0, *inter = 0;
+	struct buf *work = 0, *inter = 0, *attr = 0;
 	size_t beg = 0, end, pre, sublist = 0, orgpre = 0, i;
 	int in_empty = 0, has_inside_empty = 0, in_fence = 0;
 
@@ -1696,6 +1731,17 @@ parse_listitem(struct buf *ob, struct sd_markdown *rndr, uint8_t *data, size_t s
 	/* putting the first line into the working buffer */
 	bufput(work, data + beg, end - beg);
 	beg = end;
+
+    attr = rndr_newbuf(rndr, BUFFER_ATTRIBUTE);
+    if (rndr->ext_flags & MKDEXT_SPECIAL_ATTRIBUTES) {
+        if (work->data[work->size-1] == '\n') {
+            work->size--;
+            parse_attributes(work, attr, 0);
+            bufputc(work, '\n');
+        } else {
+            parse_attributes(work, attr, 0);
+        }
+    }
 
 	/* process the following lines */
 	while (beg < size) {
@@ -1793,11 +1839,22 @@ parse_listitem(struct buf *ob, struct sd_markdown *rndr, uint8_t *data, size_t s
 	}
 
 	/* render of li itself */
-	if (rndr->cb.listitem)
-		rndr->cb.listitem(ob, inter, *flags, rndr->opaque);
+	if (rndr->cb.listitem) {
+        if ((rndr->ext_flags & MKDEXT_SPECIAL_ATTRIBUTES) && !attr->size) {
+            if (inter->data[inter->size-1] == '\n') {
+                inter->size--;
+                parse_attributes(inter, attr, 0);
+                bufputc(inter, '\n');
+            } else {
+                parse_attributes(inter, attr, 0);
+            }
+        }
+        rndr->cb.listitem(ob, inter, attr, *flags, rndr->opaque);
+    }
 
 	rndr_popbuf(rndr, BUFFER_SPAN);
 	rndr_popbuf(rndr, BUFFER_SPAN);
+    rndr_popbuf(rndr, BUFFER_ATTRIBUTE);
 	return beg;
 }
 
@@ -1848,13 +1905,19 @@ parse_atxheader(struct buf *ob, struct sd_markdown *rndr, uint8_t *data, size_t 
 
 	if (end > i) {
 		struct buf *work = rndr_newbuf(rndr, BUFFER_SPAN);
+        struct buf *attr =  rndr_newbuf(rndr, BUFFER_ATTRIBUTE);
 
 		parse_inline(work, rndr, data + i, end - i);
 
-		if (rndr->cb.header)
-			rndr->cb.header(ob, work, (int)level, rndr->ext_flags & MKDEXT_SPECIAL_ATTRIBUTES, rndr->opaque);
+		if (rndr->cb.header) {
+            if (rndr->ext_flags & MKDEXT_SPECIAL_ATTRIBUTES) {
+                parse_attributes(work, attr, 1);
+            }
+            rndr->cb.header(ob, work, attr, (int)level, rndr->opaque);
+        }
 
 		rndr_popbuf(rndr, BUFFER_SPAN);
+        rndr_popbuf(rndr, BUFFER_ATTRIBUTE);
 	}
 
 	return skip;

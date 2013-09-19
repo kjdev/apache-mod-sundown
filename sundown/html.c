@@ -26,6 +26,7 @@
 #include "houdini.h"
 
 #define USE_XHTML(opt) (opt->flags & HTML_USE_XHTML)
+#define USE_TASK_LIST(opt) (opt->flags & HTML_USE_TASK_LIST)
 
 int
 sdhtml_is_tag(const uint8_t *tag_data, size_t tag_size, const char *tagname)
@@ -255,42 +256,21 @@ static int
 rndr_linebreak(struct buf *ob, void *opaque)
 {
 	struct html_renderopt *options = opaque;
-    bufputs(ob, USE_XHTML(options) ? "<br />\n" : "<br>\n");
+    bufputs(ob, USE_XHTML(options) ? "<br/>\n" : "<br>\n");
 	return 1;
 }
 
 static void
-rndr_header(struct buf *ob, const struct buf *text, int level, int flags, void *opaque)
+rndr_header(struct buf *ob, const struct buf *text, const struct buf *attr, int level, void *opaque)
 {
 	struct html_renderopt *options = opaque;
-    size_t size = text->size, start = 0, end = 0;
 
 	if (ob->size)
 		bufputc(ob, '\n');
 
-    if (flags && size && text->data[size-1] == '}') {
-        do {
-            size--;
-        } while (size && text->data[size] != '{');
-
-        start = size + 1;
-        end = text->size - 1;
-
-        while (size && text->data[size-1] == ' ')
-            size--;
-    }
-
-    if (size && text->data[size-1] == '#') {
-        while (size && text->data[size-1] == '#')
-            size--;
-        while (size && text->data[size-1] == ' ')
-            size--;
-    }
-
-    if (start && end)
-    {
+    if (attr && attr->size) {
         bufprintf(ob, "<h%d", level);
-        rndr_attributes(ob, text->data + start, end - start, opaque);
+        rndr_attributes(ob, attr->data, attr->size, opaque);
         bufputc(ob, '>');
     }
     else if (options->flags & HTML_TOC)
@@ -298,7 +278,7 @@ rndr_header(struct buf *ob, const struct buf *text, int level, int flags, void *
 	else
 		bufprintf(ob, "<h%d>", level);
 
-	if (text) bufput(ob, text->data, size);
+	if (text) bufput(ob, text->data, text->size);
 	bufprintf(ob, "</h%d>\n", level);
 }
 
@@ -347,16 +327,45 @@ rndr_list(struct buf *ob, const struct buf *text, int flags, void *opaque)
 }
 
 static void
-rndr_listitem(struct buf *ob, const struct buf *text, int flags, void *opaque)
+rndr_listitem(struct buf *ob, const struct buf *text, const struct buf *attr, int flags, void *opaque)
 {
-	BUFPUTSL(ob, "<li>");
+    struct html_renderopt *options = opaque;
 	if (text) {
+        size_t prefix = 0;
 		size_t size = text->size;
 		while (size && text->data[size - 1] == '\n')
 			size--;
 
-		bufput(ob, text->data, size);
-	}
+        BUFPUTSL(ob, "<li");
+        if (attr && attr->size) {
+            rndr_attributes(ob, attr->data, attr->size, opaque);
+        }
+        bufputc(ob, '>');
+
+        if (USE_TASK_LIST(options) && size >= 3) {
+            if (flags & MKD_LI_BLOCK) {
+                prefix = 3;
+            }
+
+            if (strncmp((char *)text->data + prefix, "[ ]", 3) == 0) {
+                bufput(ob, text->data, prefix);
+                BUFPUTSL(ob, "<input type=\"checkbox\"");
+                bufputs(ob, USE_XHTML(options) ? "/>" : ">");
+                prefix += 3;
+                size -= prefix;
+            } else if (strncmp((char *)text->data + prefix, "[x]", 3) == 0) {
+                bufput(ob, text->data, prefix);
+                BUFPUTSL(ob, "<input checked=\"\" type=\"checkbox\"");
+                bufputs(ob, USE_XHTML(options) ? "/>" : ">");
+                prefix += 3;
+                size -= prefix;
+            }
+        }
+
+        bufput(ob, text->data+prefix, size);
+    } else {
+        BUFPUTSL(ob, "<li>");
+    }
 	BUFPUTSL(ob, "</li>\n");
 }
 
@@ -407,8 +416,11 @@ rndr_paragraph(struct buf *ob, const struct buf *text, void *opaque)
                 bufput(ob, text->data + org, i - org);
             if (i >= text->size - 1)
                 break;
-            if (text->data[i] == '\n' && isascii(text->data[i-1]))
-                BUFPUTSL(ob, " ");
+            if (text->data[i] == '\n' && isascii(text->data[i-1])) {
+                if (i < 5 || strncmp((char *)text->data+i-5, "<br/>", 5) != 0) {
+                    BUFPUTSL(ob, " ");
+                }
+            }
             i++;
         }
 	} else {
@@ -447,7 +459,7 @@ rndr_hrule(struct buf *ob, void *opaque)
 {
 	struct html_renderopt *options = opaque;
 	if (ob->size) bufputc(ob, '\n');
-    bufputs(ob, USE_XHTML(options) ? "<hr />\n" : "<hr>\n");
+    bufputs(ob, USE_XHTML(options) ? "<hr/>\n" : "<hr>\n");
 }
 
 static int
@@ -472,7 +484,7 @@ rndr_image(struct buf *ob, const struct buf *link, const struct buf *title, cons
         rndr_attributes(ob, attr->data, attr->size, opaque);
     }
 
-    bufputs(ob, USE_XHTML(options) ? " />" : ">");
+    bufputs(ob, USE_XHTML(options) ? "/>" : ">");
 	return 1;
 }
 
@@ -586,10 +598,9 @@ rndr_normal_text(struct buf *ob, const struct buf *text, void *opaque)
 }
 
 static void
-toc_header(struct buf *ob, const struct buf *text, int level, int flags, void *opaque)
+toc_header(struct buf *ob, const struct buf *text, const struct buf *attr, int level, void *opaque)
 {
 	struct html_renderopt *options = opaque;
-    size_t size = text->size, start = 0, end = 0;
 
     if (options->toc_data.begin_level && level < options->toc_data.begin_level) {
         options->toc_data.header_count++;
@@ -613,7 +624,12 @@ toc_header(struct buf *ob, const struct buf *text, int level, int flags, void *o
             if (options->toc_data.is_class) {
                 BUFPUTSL(ob, "<ul>\n<li>\n");
             } else {
-                BUFPUTSL(ob, "<ul class=\"toc\">\n<li>\n");
+                if (options->toc_data.class) {
+                    bufprintf(ob, "<ul class=\"%s\">\n<li>\n",
+                              options->toc_data.class);
+                } else {
+                    BUFPUTSL(ob, "<ul>\n<li>\n");
+                }
                 options->toc_data.is_class = 1;
             }
 			options->toc_data.current_level++;
@@ -629,38 +645,19 @@ toc_header(struct buf *ob, const struct buf *text, int level, int flags, void *o
 		BUFPUTSL(ob,"</li>\n<li>\n");
 	}
 
-    if (flags && size && text->data[size-1] == '}') {
-        do {
-            size--;
-        } while (size && text->data[size] != '{');
-
-        start = size + 1;
-        end = text->size - 1;
-
-        while (size && text->data[size-1] == ' ')
-            size--;
-    }
-
-    if (size && text->data[size-1] == '#') {
-        while (size && text->data[size-1] == '#')
-            size--;
-        while (size && text->data[size-1] == ' ')
-            size--;
-    }
-
-    if (start && end) {
-        size_t n, i = start;
+    if (attr && attr->size) {
+        size_t n, i = 0;
         do {
             i++;
-        } while (i < end && text->data[i-1] != '#');
-        if (i < end) {
+        } while (i < attr->size && attr->data[i-1] != '#');
+        if (i < attr->size) {
             n = i;
-            while (n < end && text->data[n] != '#' &&
-                   text->data[n] != '.' && text->data[n] != ' ') {
+            while (n < attr->size && attr->data[n] != '#' &&
+                   attr->data[n] != '.' && attr->data[n] != ' ') {
                 n++;
             }
             BUFPUTSL(ob, "<a href=\"#");
-            escape_html(ob, text->data + i, n - i);
+            escape_html(ob, attr->data + i, n - i);
             BUFPUTSL(ob, "\">");
         }
     } else {
@@ -668,7 +665,7 @@ toc_header(struct buf *ob, const struct buf *text, int level, int flags, void *o
     }
 
 	if (text)
-        bufput(ob, text->data, size);
+        bufput(ob, text->data, text->size);
 	BUFPUTSL(ob, "</a>\n");
 }
 

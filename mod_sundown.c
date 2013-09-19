@@ -473,6 +473,7 @@ sundown_handler(request_rec *r)
             if (end) {
                 options.toc_data.end_level = end;
             }
+            options.toc_data.class = "toc";
 
             markdown = sd_markdown_new(markdown_extensions, 16,
                                        &callbacks, &options);
@@ -500,6 +501,9 @@ sundown_handler(request_rec *r)
 #endif
 #ifdef SUNDOWN_TOC_SUPPORT
         options.flags |= HTML_TOC;
+#endif
+#ifdef SUNDOWN_USE_TASK_LISTS
+        options.flags |= HTML_USE_TASK_LIST;
 #endif
 
         markdown = sd_markdown_new(markdown_extensions, 16,

@@ -145,7 +145,17 @@ AC_ARG_ENABLE(sundown-toc,
   [ENABLED_SUNDOWN_TOC=no]
 )
 AS_IF([test "x${ENABLED_SUNDOWN_TOC}" = xyes],
-    [AC_DEFINE([SUNDOWN_USE_TOC], [1], [enable xhtml])]
+    [AC_DEFINE([SUNDOWN_USE_TOC], [1], [enable toc])]
+)
+
+AC_ARG_ENABLE(sundown-task-lists,
+  AC_HELP_STRING([--enable-sundown-task-lists],
+    [enable sundown extenssion task lists [default=no]]),
+  [ENABLED_SUNDOWN_TASK_LISTS="${enableval:-yes}"],
+  [ENABLED_SUNDOWN_TASK_LISTS=no]
+)
+AS_IF([test "x${ENABLED_SUNDOWN_TASK_LISTS}" = xyes],
+    [AC_DEFINE([SUNDOWN_USE_TASK_LISTS], [1], [enable task-lists])]
 )
 
 # Option for sundown raw support
