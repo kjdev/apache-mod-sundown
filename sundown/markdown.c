@@ -1849,7 +1849,7 @@ parse_listitem(struct buf *ob, struct sd_markdown *rndr, uint8_t *data, size_t s
                 parse_attributes(inter, attr, 0);
             }
         }
-        rndr->cb.listitem(ob, inter, attr, *flags, rndr->opaque);
+        rndr->cb.listitem(ob, inter, attr, flags, rndr->opaque);
     }
 
 	rndr_popbuf(rndr, BUFFER_SPAN);

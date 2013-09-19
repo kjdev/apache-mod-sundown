@@ -36,6 +36,12 @@ struct html_renderopt {
 		char *class;
 	} toc_data;
 
+    struct {
+        char *ol;
+        char *ul;
+        char *task;
+    } class_attributes;
+
 	unsigned int flags;
 
 	/* extra callbacks */

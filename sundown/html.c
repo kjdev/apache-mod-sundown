@@ -320,14 +320,32 @@ rndr_link(struct buf *ob, const struct buf *link, const struct buf *title, const
 static void
 rndr_list(struct buf *ob, const struct buf *text, int flags, void *opaque)
 {
+    struct html_renderopt *options = opaque;
 	if (ob->size) bufputc(ob, '\n');
-	bufput(ob, flags & MKD_LIST_ORDERED ? "<ol>\n" : "<ul>\n", 5);
+    if (flags & MKD_LIST_ORDERED) {
+        if ((flags & MKD_LIST_TASK) && options->class_attributes.task) {
+            bufprintf(ob, "<ol class=\"%s\">\n", options->class_attributes.task);
+        } else if (options->class_attributes.ol) {
+            bufprintf(ob, "<ol class=\"%s\">\n", options->class_attributes.ol);
+        } else {
+            bufput(ob, "<ol>\n", 5);
+        }
+    } else {
+        if ((flags & MKD_LIST_TASK) && options->class_attributes.task) {
+            bufprintf(ob, "<ul class=\"%s\">\n", options->class_attributes.task);
+        } else if (options->class_attributes.ul) {
+            bufprintf(ob, "<ul class=\"%s\">\n", options->class_attributes.ul);
+        } else {
+            bufput(ob, "<ul>\n", 5);
+        }
+    }
+
 	if (text) bufput(ob, text->data, text->size);
 	bufput(ob, flags & MKD_LIST_ORDERED ? "</ol>\n" : "</ul>\n", 6);
 }
 
 static void
-rndr_listitem(struct buf *ob, const struct buf *text, const struct buf *attr, int flags, void *opaque)
+rndr_listitem(struct buf *ob, const struct buf *text, const struct buf *attr, int *flags, void *opaque)
 {
     struct html_renderopt *options = opaque;
 	if (text) {
@@ -343,7 +361,7 @@ rndr_listitem(struct buf *ob, const struct buf *text, const struct buf *attr, in
         bufputc(ob, '>');
 
         if (USE_TASK_LIST(options) && size >= 3) {
-            if (flags & MKD_LI_BLOCK) {
+            if (*flags & MKD_LI_BLOCK) {
                 prefix = 3;
             }
 
@@ -353,12 +371,14 @@ rndr_listitem(struct buf *ob, const struct buf *text, const struct buf *attr, in
                 bufputs(ob, USE_XHTML(options) ? "/>" : ">");
                 prefix += 3;
                 size -= prefix;
+                *flags |= MKD_LIST_TASK;
             } else if (strncmp((char *)text->data + prefix, "[x]", 3) == 0) {
                 bufput(ob, text->data, prefix);
                 BUFPUTSL(ob, "<input checked=\"\" type=\"checkbox\"");
                 bufputs(ob, USE_XHTML(options) ? "/>" : ">");
                 prefix += 3;
                 size -= prefix;
+                *flags |= MKD_LIST_TASK;
             }
         }
 

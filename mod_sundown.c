@@ -8,6 +8,9 @@
 **    SundownStylePath      /var/www/html/style
 **    SundownStyleDefault   default
 **    SundownStyleExtension .html
+**    SundownClassUl        ul-list
+**    SundownClassOl        ol-list
+**    SundownClassTask      task-list
 **    SundownPageDefault    /var/www/html/README.md
 **    SundownDirectoryIndex index.md
 **    <Location /sundown>
@@ -88,6 +91,9 @@ typedef struct {
     char *style_ext;
     char *page_default;
     char *directory_index;
+    char *class_ul;
+    char *class_ol;
+    char *class_task;
 } sundown_config_rec;
 
 module AP_MODULE_DECLARE_DATA sundown_module;
@@ -113,14 +119,11 @@ output_style_header(request_rec *r, apr_file_t *fp)
 }
 
 static apr_file_t *
-style_header(request_rec *r, char *filename)
+style_header(request_rec *r, sundown_config_rec *cfg, char *filename)
 {
     apr_status_t rc = -1;
     apr_file_t *fp = NULL;
     char *style_filepath = NULL;
-    sundown_config_rec *cfg;
-
-    cfg = ap_get_module_config(r->per_dir_config, &sundown_module);
 
     if (filename == NULL && cfg->style_default != NULL) {
         filename = cfg->style_default;
@@ -226,15 +229,13 @@ append_url_data(void *buffer, size_t size, size_t nmemb, void *user)
 }
 
 static int
-append_page_data(request_rec *r, struct buf *ib, char *name, int directory)
+append_page_data(request_rec *r, sundown_config_rec *cfg,
+                 struct buf *ib, char *name, int directory)
 {
     apr_status_t rc = -1;
     apr_file_t *fp = NULL;
     apr_size_t read;
     char *filename = NULL;
-    sundown_config_rec *cfg;
-
-    cfg = ap_get_module_config(r->per_dir_config, &sundown_module);
 
     if (name == NULL) {
         if (!cfg->page_default) {
@@ -295,6 +296,8 @@ sundown_handler(request_rec *r)
     apreq_handle_t *apreq;
     apr_table_t *params;
 
+    sundown_config_rec *cfg;
+
     /* sundown: markdown */
     struct buf *ib, *ob;
     struct sd_callbacks callbacks;
@@ -309,6 +312,9 @@ sundown_handler(request_rec *r)
     if (r->header_only) {
         return OK;
     }
+
+    /* config */
+    cfg = ap_get_module_config(r->per_dir_config, &sundown_module);
 
     /* set contest type */
     r->content_type = SUNDOWN_CONTENT_TYPE;
@@ -341,7 +347,7 @@ sundown_handler(request_rec *r)
     if (url || text) {
         directory = 0;
     }
-    append_page_data(r, ib, r->filename, directory);
+    append_page_data(r, cfg, ib, r->filename, directory);
 
     /* text */
     if (text && strlen(text) > 0) {
@@ -380,7 +386,7 @@ sundown_handler(request_rec *r)
 
     /* default page */
     if (ib->size == 0) {
-        ret = append_page_data(r, ib, NULL, 0);
+        ret = append_page_data(r, cfg, ib, NULL, 0);
         if (ret != APR_SUCCESS) {
             bufrelease(ib);
             return ret;
@@ -398,7 +404,7 @@ sundown_handler(request_rec *r)
 #endif
 
         /* output style header */
-        fp = style_header(r, style);
+        fp = style_header(r, cfg, style);
 
         /* markdown extensions */
         markdown_extensions = 0;
@@ -504,7 +510,17 @@ sundown_handler(request_rec *r)
 #endif
 #ifdef SUNDOWN_USE_TASK_LISTS
         options.flags |= HTML_USE_TASK_LIST;
+        if (cfg->class_task) {
+            options.class_attributes.task = cfg->class_task;
+        }
 #endif
+
+        if (cfg->class_ol) {
+            options.class_attributes.ol = cfg->class_ol;
+        }
+        if (cfg->class_ul) {
+            options.class_attributes.ul = cfg->class_ul;
+        }
 
         markdown = sd_markdown_new(markdown_extensions, 16,
                                    &callbacks, &options);
@@ -519,7 +535,7 @@ sundown_handler(request_rec *r)
         bufrelease(ob);
     } else {
         /* output style header */
-        fp = style_header(r, style);
+        fp = style_header(r, cfg, style);
     }
 
     /* cleanup */
@@ -545,6 +561,9 @@ sundown_create_dir_config(apr_pool_t *p, char *dir)
     cfg->style_ext = SUNDOWN_STYLE_EXT;
     cfg->page_default = NULL;
     cfg->directory_index = SUNDOWN_DIRECTORY_INDEX;
+    cfg->class_ul = NULL;
+    cfg->class_ol = NULL;
+    cfg->class_task = NULL;
 
     return (void *)cfg;
 }
@@ -586,6 +605,24 @@ sundown_merge_dir_config(apr_pool_t *p, void *base_conf, void *override_conf)
         cfg->directory_index = base->directory_index;
     }
 
+    if (override->class_ul && strlen(override->class_ul) > 0) {
+        cfg->class_ul = override->class_ul;
+    } else {
+        cfg->class_ul = base->class_ul;
+    }
+
+    if (override->class_ol && strlen(override->class_ol) > 0) {
+        cfg->class_ol = override->class_ol;
+    } else {
+        cfg->class_ol = base->class_ol;
+    }
+
+    if (override->class_task && strlen(override->class_task) > 0) {
+        cfg->class_task = override->class_task;
+    } else {
+        cfg->class_task = base->class_task;
+    }
+
     return (void *)cfg;
 }
 
@@ -606,6 +643,17 @@ sundown_cmds[] = {
     AP_INIT_TAKE1("SundownDirectoryIndex", ap_set_string_slot,
                   (void *)APR_OFFSETOF(sundown_config_rec, directory_index),
                   OR_ALL, "sundown directory index page"),
+    AP_INIT_TAKE1("SundownClassUl", ap_set_string_slot,
+                  (void *)APR_OFFSETOF(sundown_config_rec, class_ul),
+                  OR_ALL, "sundown ul class attributes"),
+    AP_INIT_TAKE1("SundownClassOl", ap_set_string_slot,
+                  (void *)APR_OFFSETOF(sundown_config_rec, class_ol),
+                  OR_ALL, "sundown ol class attributes"),
+#ifdef SUNDOWN_USE_TASK_LISTS
+    AP_INIT_TAKE1("SundownClassTask", ap_set_string_slot,
+                  (void *)APR_OFFSETOF(sundown_config_rec, class_task),
+                  OR_ALL, "sundown task list class attributes"),
+#endif
     {NULL}
 };
 
