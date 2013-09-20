@@ -379,6 +379,8 @@ rndr_listitem(struct buf *ob, const struct buf *text, const struct buf *attr, in
                 prefix += 3;
                 size -= prefix;
                 *flags |= MKD_LIST_TASK;
+            } else {
+                prefix = 0;
             }
         }
 
