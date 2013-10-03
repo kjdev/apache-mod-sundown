@@ -2,6 +2,10 @@
 
 mod_sundown is Markdown handler module for Apache HTTPD Server.
 
+mod_sundown is deprecated.
+
+change to [mod_hoedown](https://github.com/kjdev/apache-mod-hoedown).
+
 ## Dependencies ##
 
 * [sundown](https://github.com/kjdev/sundown)
